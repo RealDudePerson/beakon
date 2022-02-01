@@ -4,12 +4,17 @@ Beakon is designed to be a self-host location sharing webserver. Beakon aims to 
 ## Dependencies
 ### Python
 flask
+
 flask_sqlalchemy
+
 flask_login
+
 pyOpenSSL
+
 
 ### HTML/CSS/JS
 Foundation
+
 Leaflet
 
 ### Hosted Dependencies
