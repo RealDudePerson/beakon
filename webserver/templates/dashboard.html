@@ -1,0 +1,69 @@
+{% extends "layout.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block top_menu_buttons %}
+<li><a href="{{url_for('update_info')}}">Account</a></li>
+<li><a href="{{ url_for('logout') }}"><button class="button topbar-responsive-button" type="button">Logout</button></a></li>
+{% endblock %}
+{% block content %}
+<div class="grid-x grid-padding-x">
+  <div class="large-12 cell">
+    <h1>Welcome to Beakon</h1>
+  </div>
+</div>
+<div class="grid-x grid-padding-x">
+  <div class="large-9 medium-9 cell">
+    <h5>Map {% if fname != Null %} of {{fname}} {{lname}} {% endif %}</h5>
+    
+
+    <div class="grid-x grid-padding-x">
+      <div class="large-12 cell">
+        <div class="responsive-embed">
+          <div id="map"></div>
+        </div>
+        <hr />
+      </div>
+    </div>
+      <div class="grid-x grid-padding-x">
+    </div>
+  </div>
+  
+  <div class="large-3 medium-3 cell">
+      <h5>Stats</h5>
+      <h6>{{fname}} {{lname}}</h6>
+      {% if lat != Null %}
+      <div class="callout">
+      <ul>
+          <li>Last updated: {{ timestamp }}</li>
+          <li>Lat: {{ lat }}</li>
+          <li>Lon: {{ lon }}</li>
+      </ul>
+      </div>
+      {% endif %}
+      <br>
+      {% if sharing_permission_list != Null %}
+      <div class="callout">
+        <h5>View Locations</h5>
+            {%for i in range(0,sharing_permission_count)%}
+            <a href="/map/{{sharing_permission_list[i]}}" class="success button">View {{ sharing_permission_list[i]}}</a><br>
+            {%endfor%}
+      {% endif %}
+  </div>
+</div>
+{% endblock %}
+{% block script %}
+    <script>
+        var map = L.map('map').setView([{{lat}}, {{lon}}], 13);
+        L.tileLayer('https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}', {
+            attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Imagery © <a href="https://www.mapbox.com/">Mapbox</a>',
+            maxZoom: 18,
+            id: 'mapbox/streets-v11',
+            tileSize: 512,
+            zoomOffset: -1,
+            accessToken: '{{mapboxapi}}'
+        }).addTo(map);
+        var mapMarker = L.marker([{{lat}},{{lon}}],{
+            title: "{{fname}} {{lname}}"
+        });
+        mapMarker.addTo(map);
+    </script>
+{% endblock %}

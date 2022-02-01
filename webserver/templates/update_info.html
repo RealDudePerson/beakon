@@ -1,0 +1,138 @@
+{% extends "layout.html" %}
+{% block title %}Update Account Info{% endblock %}
+{% block content %}
+<div class="grid-x grid-padding-x">
+  <div class="large-12 cell">
+    <h3>Update account info below</h3>
+  </div>
+</div>
+
+<div class="grid-x grid-padding-x">
+  <div class="large-12 cell">
+    <div class="callout primary">
+      <div class="grid-x grid-margin-x">
+          <div class="cell large-4 medium-6 small-12">
+              <p>Username: {{ username }}</p>
+          </div>
+          <div class="cell large-4 medium-6 small-12">
+            <p>First Name: {{ fname }}</p>
+        </div>
+        <div class="cell large-4 medium-6 small-12">
+          <p>Last Name: {{ lname }}</p>
+        </div>
+        <div class="cell large-4 medium-6 small-12">
+          <p>User ID: {{ id }}</p>
+        </div>
+      </div>
+    </div>
+    <div class="callout">
+      <form action="/updateinfo" method="POST" data-abide novalidate>
+        <div class="grid-x grid-margin-x">
+          <div class="cell">
+            <div data-abide-error class="alert callout" style="display: none;">
+              <p><i class="fi-alert"></i> There are some errors in your form.</p>
+            </div>
+          </div>
+        </div>
+        <div class="grid-x grid-margin-x">
+          <div class="cell large-4 medium-6 small-12">
+              <label>First Name
+                  <input type="text" placeholder="First Name" name="fname" required>
+                  <span class="form-error">
+                  Yo, you had better fill this out, it's required.
+                  </span>
+              </label>
+          </div>
+          <div class="cell large-4 medium-6 small-12">
+              <label>Last Name
+                  <input type="text" placeholder="Last Name" name="lname" required>
+                  <span class="form-error">
+                  You forgot to enter your last name genius.
+                  </span>
+              </label>
+          </div>
+          <div class="cell large-4 medium-6 small-12">
+              <br>
+              <fieldset class="cell medium-6">
+                  <button class="button" type="submit" value="Submit">Submit</button>
+              </fieldset>
+          </div>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+  <div class="grid-x grid-padding-x">
+    <div class="large-12 cell">
+        <div class="callout">
+        <form action="{{url_for('add_permissions')}}" method="POST" data-abide novalidate>
+            <div class="grid-x grid-margin-x">
+                <div class="cell">
+                    <div data-abide-error class="alert callout" style="display: none;">
+                        <p><i class="fi-alert"></i> There are some errors in your form.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="grid-x grid-margin-x">
+            <div class="cell large-4 medium-6 small-12">
+                <label>Grant Access to location. Enter their username.
+                    <input type="text" placeholder="username" name="add_permission_username" required>
+                    <span class="form-error">
+                    Yo, you had better fill this out, it's required.
+                    </span>
+                </label>
+            </div>
+            <div class="cell large-4 medium-6 small-12">
+                <br>
+                <fieldset class="cell medium-6">
+                    <button class="button" type="submit" value="Submit">Submit</button>
+                </fieldset>
+            </div>
+        </form>
+        </div>
+    </div>
+</div>
+<div class="large-12 cell">
+<div class="callout">
+    <form action="/updatepermissions/remove" method="POST" data-abide novalidate>
+        <div class="grid-x grid-margin-x">
+            <div class="cell">
+                <div data-abide-error class="alert callout" style="display: none;">
+                    <p><i class="fi-alert"></i> There are some errors in your form.</p>
+                </div>
+            </div>
+        </div>
+        <div class="grid-x grid-margin-x">
+        <div class="cell large-4 medium-6 small-12">
+            <label>Remove Access to location. Enter their username.
+                <input type="text" placeholder="username" name="remove_permission_username" required>
+                <span class="form-error">
+                Yo, you had better fill this out, it's required.
+                </span>
+            </label>
+        </div>
+        <div class="cell large-4 medium-6 small-12">
+            <br>
+            <fieldset class="cell medium-6">
+                <button class="button" type="submit" value="Submit">Submit</button>
+            </fieldset>
+        </div>
+    </form>
+    </div>
+</div>
+{% if sharing_permission_list != Null %}
+        <div class="callout">
+        <ul>
+        <h5>Location Shared With:</h5>
+            {%for i in range(0,sharing_permission_count)%}
+            <li>{{ sharing_permission_list[i]}}</li><br>
+            {%endfor%}
+        </ul>
+        {% endif %}
+
+    
+  </div>
+</div>
+</div>        
+</div>
+{% endblock %}

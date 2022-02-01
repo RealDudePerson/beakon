@@ -1,0 +1,54 @@
+{% extends "layout.html" %}
+{% block title %}Login{% endblock %}
+{% block top_menu_buttons %}
+<li><a href="{{ url_for('login') }}"><button type="button" class="button topbar-responsive-button">Login</buttonn></a></li>
+{% endblock %}
+{% block content %}
+<div class="grid-x grid-padding-x">
+  <div class="large-12 cell">
+    <h1>Welcome to Beakon</h1>
+  </div>
+</div>
+
+<div class="grid-x grid-padding-x">
+  <div class="large-12 cell">
+    <div class="callout">
+      <form action="/login" method="POST" data-abide novalidate>
+        <div class="grid-x grid-margin-x">
+          <div class="cell">
+            <div data-abide-error class="alert callout" style="display: none;">
+              <p><i class="fi-alert"></i> There are some errors in your form.</p>
+            </div>
+          </div>
+        </div>
+        <div class="grid-x grid-margin-x">
+          <div class="cell large-4 medium-6 small-12">
+            <label>Username
+              <input type="text" placeholder="username" name="username" required>
+              <span class="form-error">
+                Yo, you had better fill this out, it's required.
+              </span>
+            </label>
+            <div class="cell large-4 medium-6 small-12">
+              <label>Password
+                <input type="password" placeholder="password" name="password" required>
+                <span class="form-error">
+                  You forgot to enter your password genius.
+                </span>
+              </label>
+            </div>
+            <div class="cell large-4 medium-6 small-12">
+              <fieldset class="cell medium-6">
+                <button class="button" type="submit" value="Submit">Submit</button>
+              </fieldset>
+            </div>
+            <div class="cell large-4 medium-6 small-12">
+              <a href="{{ url_for('register')}}">Register</a>
+            </div>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
