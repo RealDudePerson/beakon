@@ -13,15 +13,18 @@ pyOpenSSL
 
 
 ### HTML/CSS/JS
-Foundation
+[foundation]
 
-Leaflet
+[leaflet]
 
 ### Hosted Dependencies
-MapBox
+[mapbox]
 
+### Useful Third Party Tools
+[GPSLogger] is an open source android app that can automatically send requests to update your location in Beakon.
 
 
 [mapbox]: https://www.mapbox.com/
 [leaflet]: https://github.com/Leaflet/Leaflet
 [foundation]: https://github.com/foundation/foundation-sites
+[gpslogger]: https://gpslogger.app
