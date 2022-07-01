@@ -11,13 +11,20 @@ class UserModel(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(100), unique=True)
     password_hash = db.Column(db.String())
+    api_token_hash = db.Column(db.String(), unique=True)
  
     def set_password(self,password):
         self.password_hash = generate_password_hash(password)
      
     def check_password(self,password):
         return check_password_hash(self.password_hash,password)
-    
+
+    def set_api_token(self,api_token):
+        self.api_token_hash = generate_password_hash(api_token)
+
+    def check_api_token(self,api_token):
+        return check_password_hash(self.api_token_hash,api_token)
+
     def get_username(self):
         return self.username
 

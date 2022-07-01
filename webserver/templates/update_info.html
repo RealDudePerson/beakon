@@ -120,6 +120,36 @@
     </form>
     </div>
 </div>
+
+<div class="callout">
+  <form action="{{url_for('update_token')}}" method="POST" data-abide novalidate>
+      <div class="grid-x grid-margin-x">
+          <div class="cell">
+              <div data-abide-error class="alert callout" style="display: none;">
+                  <p><i class="fi-alert"></i> There are some errors in your form.</p>
+              </div>
+          </div>
+      </div>
+      <div class="grid-x grid-margin-x">
+      <div class="cell large-4 medium-6 small-12">
+          <label>Set API Key. Choose something randomly generated and long. WARNING! SETTING THIS WILL INVALIDATE EXISTING API TOKENS
+              <input type="text" placeholder="api_key" name="secret" required>
+              <span class="form-error">
+              Yo, you had better fill this out, it's required.
+              </span>
+          </label>
+      </div>
+      <div class="cell large-4 medium-6 small-12">
+          <br>
+          <fieldset class="cell medium-6">
+              <button class="button" type="submit" value="Submit">Submit</button>
+          </fieldset>
+      </div>
+  </form>
+  </div>
+</div>
+
+
 {% if sharing_permission_list != Null %}
         <div class="callout">
         <ul>
@@ -128,10 +158,8 @@
             <li>{{ sharing_permission_list[i]}}</li><br>
             {%endfor%}
         </ul>
-        {% endif %}
-
-    
-  </div>
+{% endif %}
+</div>
 </div>
 </div>        
 </div>
