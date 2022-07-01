@@ -44,3 +44,7 @@ coverage.xml
 
 # Translations
 *.mo
+venv2/lib64
+.gitignore
+venv2/include/site/python3.10/greenlet/greenlet.h
+venv2/pyvenv.cfg

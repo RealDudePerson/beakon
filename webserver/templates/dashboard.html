@@ -2,6 +2,7 @@
 {% block title %}Dashboard{% endblock %}
 {% block top_menu_buttons %}
 <li><a href="{{url_for('update_info')}}">Account</a></li>
+<li><a href="{{url_for('record_location')}}">UpdateLocation</a></li>
 <li><a href="{{ url_for('logout') }}"><button class="button topbar-responsive-button" type="button">Logout</button></a></li>
 {% endblock %}
 {% block content %}
@@ -17,9 +18,13 @@
 
     <div class="grid-x grid-padding-x">
       <div class="large-12 cell">
+        {% if lat != Null %}
         <div class="responsive-embed">
           <div id="map"></div>
         </div>
+        {% else %}
+            You will see a map here once you have a <a href="{{url_for('record_location')}}"">location recorded</a>.
+        {% endif %}
         <hr />
       </div>
     </div>
@@ -29,7 +34,11 @@
   
   <div class="large-3 medium-3 cell">
       <h5>Stats</h5>
+      {% if fname != Null %}
       <h6>{{fname}} {{lname}}</h6>
+      {% else %}
+      <h6>Update your name from the <a href="{{url_for('update_info')}}">Account</a> page</h6>
+      {% endif %}
       {% if lat != Null %}
       <div class="callout">
       <ul>
@@ -40,20 +49,25 @@
       </div>
       {% endif %}
       <br>
-      {% if sharing_permission_list != Null %}
+      {% if sharing_permission_count >= 1 %}
       <div class="callout">
         <h5>View Locations</h5>
             {%for i in range(0,sharing_permission_count)%}
             <a href="/map/{{sharing_permission_list[i]}}" class="success button">View {{ sharing_permission_list[i]}}</a><br>
             {%endfor%}
+      {% else %}
+      <div class="callout">
+        When someone shares their location with you, a button will appear here. Tell them to add '{{username}}' to their sharing list.
+      </div>
       {% endif %}
   </div>
 </div>
 {% endblock %}
 {% block script %}
+{% if lat != Null %}
     <script>
         var map = L.map('map').setView([{{lat}}, {{lon}}], 13);
-        L.tileLayer('https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}', {
+        L.tileLayer('https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={{mapboxapi}}', {
             attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Imagery © <a href="https://www.mapbox.com/">Mapbox</a>',
             maxZoom: 18,
             id: 'mapbox/streets-v11',
@@ -66,4 +80,5 @@
         });
         mapMarker.addTo(map);
     </script>
+{% endif %}
 {% endblock %}
