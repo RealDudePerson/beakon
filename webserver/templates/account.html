@@ -15,18 +15,17 @@
               <p>Username: {{ username }}</p>
           </div>
           <div class="cell large-4 medium-6 small-12">
-            <p>First Name: {{ fname }}</p>
+            <p>First Name: <span id='first-name-span'>{{ fname }}</span></p>
         </div>
         <div class="cell large-4 medium-6 small-12">
-          <p>Last Name: {{ lname }}</p>
+          <p>Last Name: <span id='last-name-span'>{{ lname }}</span></p>
         </div>
         <div class="cell large-4 medium-6 small-12">
-          <p>User ID: {{ id }}</p>
+          <p>User ID: <span id='id-span'>{{ id }}</span></p>
         </div>
       </div>
     </div>
     <div class="callout">
-      <form action="/updateinfo" method="POST" data-abide novalidate>
         <div class="grid-x grid-margin-x">
           <div class="cell">
             <div data-abide-error class="alert callout" style="display: none;">
@@ -37,87 +36,56 @@
         <div class="grid-x grid-margin-x">
           <div class="cell large-4 medium-6 small-12">
               <label>First Name
-                  <input type="text" placeholder="First Name" name="fname" required>
-                  <span class="form-error">
-                  Yo, you had better fill this out, it's required.
-                  </span>
+                  <input type="text" placeholder="First Name" name="fname" id="fname">
               </label>
           </div>
           <div class="cell large-4 medium-6 small-12">
               <label>Last Name
-                  <input type="text" placeholder="Last Name" name="lname" required>
-                  <span class="form-error">
-                  You forgot to enter your last name genius.
-                  </span>
+                  <input type="text" placeholder="Last Name" name="lname" id="lname">
               </label>
           </div>
           <div class="cell large-4 medium-6 small-12">
               <br>
               <fieldset class="cell medium-6">
-                  <button class="button" type="submit" value="Submit">Submit</button>
+                  <button class="button" type="button" value="Submit" id="name-update-btn">Update Name</button>
               </fieldset>
           </div>
           </div>
         </div>
-      </form>
     </div>
   </div>
   <div class="grid-x grid-padding-x">
     <div class="large-12 cell">
         <div class="callout">
-        <form action="{{url_for('add_permissions')}}" method="POST" data-abide novalidate>
-            <div class="grid-x grid-margin-x">
-                <div class="cell">
-                    <div data-abide-error class="alert callout" style="display: none;">
-                        <p><i class="fi-alert"></i> There are some errors in your form.</p>
-                    </div>
-                </div>
-            </div>
             <div class="grid-x grid-margin-x">
             <div class="cell large-4 medium-6 small-12">
                 <label>Grant Access to location. Enter their username.
-                    <input type="text" placeholder="username" name="add_permission_username" required>
-                    <span class="form-error">
-                    Yo, you had better fill this out, it's required.
-                    </span>
+                    <input type="text" placeholder="username" name="add_permission_username">
                 </label>
             </div>
             <div class="cell large-4 medium-6 small-12">
                 <br>
                 <fieldset class="cell medium-6">
-                    <button class="button" type="submit" value="Submit">Submit</button>
+                    <button class="button" type="button" value="Submit" id="add-access-btn">Grant Access</button>
                 </fieldset>
             </div>
-        </form>
         </div>
     </div>
 </div>
 <div class="large-12 cell">
 <div class="callout">
-    <form action="/updatepermissions/remove" method="POST" data-abide novalidate>
-        <div class="grid-x grid-margin-x">
-            <div class="cell">
-                <div data-abide-error class="alert callout" style="display: none;">
-                    <p><i class="fi-alert"></i> There are some errors in your form.</p>
-                </div>
-            </div>
-        </div>
         <div class="grid-x grid-margin-x">
         <div class="cell large-4 medium-6 small-12">
             <label>Remove Access to location. Enter their username.
-                <input type="text" placeholder="username" name="remove_permission_username" required>
-                <span class="form-error">
-                Yo, you had better fill this out, it's required.
-                </span>
+                <input type="text" placeholder="username" name="remove_permission_username">
             </label>
         </div>
         <div class="cell large-4 medium-6 small-12">
             <br>
             <fieldset class="cell medium-6">
-                <button class="button" type="submit" value="Submit">Submit</button>
+                <button class="button" type="button" value="Submit" id="remove-access-btn">Revoke Access</button>
             </fieldset>
         </div>
-    </form>
     </div>
 </div>
 
@@ -142,7 +110,7 @@
       <div class="cell large-4 medium-6 small-12">
           <br>
           <fieldset class="cell medium-6">
-              <button class="button" type="submit" value="Submit">Submit</button>
+              <button class="button" type="button" value="Submit">Update API Key</button>
           </fieldset>
       </div>
   </form>
@@ -152,10 +120,10 @@
 
 {% if sharing_permission_list != Null %}
         <div class="callout">
-        <ul>
+        <ul id="shared-with-list">
         <h5>Location Shared With:</h5>
             {%for i in range(0,sharing_permission_count)%}
-            <li>{{ sharing_permission_list[i]}}</li><br>
+            <li id="li-{{sharing_permission_list[i]}}">{{ sharing_permission_list[i]}}</li><br>
             {%endfor%}
         </ul>
 {% endif %}
@@ -163,4 +131,7 @@
 </div>
 </div>        
 </div>
+{% endblock %}
+{% block script %}
+<script src="{{ url_for('static', filename = 'js/account.js') }}"></script>
 {% endblock %}

@@ -1,7 +1,7 @@
 {% extends "layout.html" %}
 {% block title %}Dashboard{% endblock %}
 {% block top_menu_buttons %}
-<li><a href="{{url_for('update_info')}}">Account</a></li>
+<li><a href="{{url_for('account')}}">Account</a></li>
 <li><a href="{{url_for('record_location')}}">UpdateLocation</a></li>
 <li><a href="{{ url_for('logout') }}"><button class="button topbar-responsive-button" type="button">Logout</button></a></li>
 {% endblock %}
