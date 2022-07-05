@@ -68,7 +68,10 @@ def dashboard():
         lname = ""
     location = LocationsModel.query.filter_by(userid=id).order_by(LocationsModel.id.desc()).first()
     sharing_permission = SharingPermissionModel.query.filter_by(shared_with_id=id).all()
-    sharing_permission_count = len(sharing_permission)
+    if sharing_permission:
+        sharing_permission_count = len(sharing_permission)
+    else:
+        sharing_permission_count = 0
     sharing_permission_list = []
     for user in sharing_permission:
         username = user.get_data_owner_username()
@@ -78,7 +81,7 @@ def dashboard():
         lon = location.get_lon()
         timestamp = location.get_timestamp()
         return render_template('dashboard.html',username=username,fname=fname,lname=lname,lat=lat,lon=lon,timestamp=timestamp,mapboxapi=app.config['MAPBOX_API_KEY'],sharing_permission_list=sharing_permission_list,sharing_permission_count=sharing_permission_count)
-    return render_template('dashboard.html',fname=fname,lname=lname,username=username)
+    return render_template('dashboard.html',fname=fname,lname=lname,username=username,sharing_permission_count=sharing_permission_count,sharing_permission_list=sharing_permission_list)
 
 # Used for seeing userid
 @app.route('/checkid')
@@ -198,32 +201,15 @@ def api_record_location():
                 return status_code
     return status_code
 
-#Page used to update personal info and add and remove location sharing permissions
-@app.route('/updateinfo', methods=['POST','GET'])
+# This is where account information can be set and updated
+# including adding and removing location permissions
+# setting API Token
+# and updating display names
+@app.route('/account', methods=['GET'])
 @login_required
-def update_info():
+def account():
     id = current_user.get_id()
     username = UserModel.query.filter_by(id=id).first().get_username()
-    if request.method == 'POST':
-        fname = request.form['fname']
-        lname = request.form['lname']
-        userData = UserDataModel.query.filter_by(id=id).first()
-        #if user has data, overwrite
-        if userData is not None:
-            userData.set_fname(fname)
-            userData.set_lname(lname)
-            db.session.add(userData)
-            db.session.commit()
-            app.logger.info('%s %s updated their name.', fname, lname)
-        #if no record exists, create it
-        else:
-            userData = UserDataModel(id=id)
-            userData.set_fname(fname)
-            userData.set_lname(lname)
-            userData.set_admin() #TODO: Make better way to set admin, likely first user is admin, and only admins can set other admins.
-            db.session.add(userData)
-            db.session.commit()
-            app.logger.info('%s %s set their name for the first time.', fname, lname)
     sharing_permission = SharingPermissionModel.query.filter_by(data_owner_id=id).all()
     sharing_permission_count = len(sharing_permission)
     sharing_permission_list = []
@@ -236,19 +222,22 @@ def update_info():
     lname = UserDataModel.query.filter_by(id=id).first()
     if lname is not None:
         lname = lname.get_lname()
-    return render_template('update_info.html',username=username,sharing_permission_list=sharing_permission_list,sharing_permission_count=sharing_permission_count,fname=fname,lname=lname,id=id)
+    return render_template('account.html',username=username,sharing_permission_list=sharing_permission_list,sharing_permission_count=sharing_permission_count,fname=fname,lname=lname,id=id)
 
-
-#used for the logic for adding sharing permissions to a user
-@app.route('/updatepermissions/add', methods=['POST'])
+# This is the logic for updating fname, lname
+# as well as setting location sharing permissions.
+@app.route('/account/<action>', methods=['POST'])
 @login_required
-def add_permissions():
+def account_action(action):
     id = current_user.get_id()
     username = UserModel.query.filter_by(id=id).first().get_username()
-    if request.method == 'POST':
-        #Verify user exists in the system
-        add_permission_username = request.form['add_permission_username']
-        shared_with_user = UserModel.query.filter_by(username=add_permission_username).first()
+    if action == "add_permission":
+        request_data = request.get_json()
+        add_permission_username = False
+        shared_with_user = None
+        if "username" in request_data:
+            add_permission_username = request_data['username']
+            shared_with_user = UserModel.query.filter_by(username=add_permission_username).first()
         if shared_with_user is not None:
             #Check if attempting to add permission to self, ignore if so.
             if add_permission_username != username:
@@ -263,20 +252,46 @@ def add_permissions():
                     db.session.add(add_permission)
                     db.session.commit()
                     app.logger.info('%s allowed %s to view their location.', username, add_permission_username)
-    return redirect('/updateinfo')
-
-#used for the logic for removing sharing permissions to a user
-@app.route('/updatepermissions/remove', methods=['POST'])
-@login_required
-def remove_permissions():
-    id = current_user.get_id()
-    username = UserModel.query.filter_by(id=id).first().get_username()
-    if request.method == 'POST':
-        remove_permission_username = request.form['remove_permission_username']
+                    return Response(status=201)
+        else:
+            return Response(status=400)
+    elif action == "remove_permission":
+        request_data = request.get_json()
+        remove_permission_username = request_data['username']
         delete_row = SharingPermissionModel.query.filter_by(data_owner_id=id,shared_with_username=remove_permission_username).delete(synchronize_session=False)
         db.session.commit()
         app.logger.info('%s removed %s from viewing their location.', username, remove_permission_username)
-    return redirect('/updateinfo')
+        if(delete_row>0):
+            return Response(status=201)
+        return Response(status=400)
+    elif action == "update_name":
+        request_data = request.get_json()
+        if 'fname' in request_data:
+            fname = request_data['fname']
+        if 'lname' in request_data:
+            lname = request_data['lname']
+        userData = UserDataModel.query.filter_by(id=id).first()
+        #If this is the first time the user is setting their information, a userdata db record must be created.
+        if userData is None:
+            userData = UserDataModel(id=id)
+        if fname and lname:
+            app.logger.info('%s updated their full name to %s %s', username, fname, lname)
+            userData.set_fname(fname)
+            userData.set_lname(lname)
+        elif lname:
+            app.logger.info('%s updated their last name to %s', username, lname)
+            userData.set_lname(lname)
+        elif fname:
+            app.logger.info('%s updated their first name to %s', username, fname)
+            userData.set_fname(fname)
+        else:
+            app.logger.info('%s attempted to set their name, but sent a bad request.', username)
+            return Response(status=400)
+        db.session.add(userData)
+        db.session.commit()
+        return Response(status=201)
+    else:
+        return Response(status=404)
 
 #Show the location of a single user on a map
 @app.route('/map/<map_username>')
@@ -291,16 +306,22 @@ def map(map_username):
         #Verify that Sharing Permission record exists before showing content, otherwise redirect to dashboard
         has_permission = SharingPermissionModel.query.filter_by(data_owner_id=map_user.get_id(),shared_with_id=id).first()
         if has_permission is not None:
-            fname = map_user_data.get_fname()
-            lname = map_user_data.get_lname()
+            try:
+                fname = map_user_data.get_fname()
+            except:
+                fname = None
+            try:
+                lname = map_user_data.get_lname()
+            except:
+                lname = None
             location = LocationsModel.query.filter_by(userid=map_user.get_id()).order_by(LocationsModel.id.desc()).first()
+            app.logger.debug('%s removed ', location)
             if location is not None:
                 lat = location.get_lat()
                 lon = location.get_lon()
                 timestamp = location.get_timestamp()
-                app.logger.info('%s viewed %s\'s location.', username, map_user.get_username())
                 return render_template('map.html',fname=fname,lname=lname,lat=lat,lon=lon,timestamp=timestamp,mapboxapi=app.config['MAPBOX_API_KEY'])
-            return render_template('map.html',fname=fname,lname=lname)
+            return render_template('map.html',fname=fname,lname=lname) #TODO make template for no location stored yet
         else:
             return redirect('/dashboard')
     else:
