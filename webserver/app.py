@@ -160,7 +160,7 @@ def update_token():
             user.set_api_token(api_token)
             db.session.add(user)
             db.session.commit()
-            return redirect('/updateinfo')
+            return redirect('/account')
         else:
             return("Error, api_token incorrect or not found.")
     else:
