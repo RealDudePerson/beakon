@@ -40,11 +40,15 @@ In GPSLogger you can use the 'Log to custom URL' feature to update your location
 The request should be sent as a json payload in the following format with the following headers:
 
 Headers:
+
 > Content-Type: application/json
+
 > username: [username]
+
 > secret: [API Key created from account page]
 
 Body:
+
 > {"lat":"%LAT","lon":"%LON","acc":"%ACC"}
 
 
