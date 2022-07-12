@@ -45,7 +45,7 @@ def login():
     if current_user.is_authenticated:
         return redirect('/dashboard')
     if request.method == 'POST':
-        username = request.form['username']
+        username = request.form['username'].lower()
         user = UserModel.query.filter_by(username = username).first()
         if user is not None and user.check_password(request.form['password']):
             login_user(user,remember=True)
@@ -107,7 +107,7 @@ def register():
             return redirect('/dashboard')
         
         if request.method == 'POST':
-            username = request.form['username']
+            username = request.form['username'].lower()
             password = request.form['password']
 
             if UserModel.query.filter_by(username=username).first():
@@ -236,7 +236,7 @@ def account_action(action):
         add_permission_username = False
         shared_with_user = None
         if "username" in request_data:
-            add_permission_username = request_data['username']
+            add_permission_username = request_data['username'].lower()
             shared_with_user = UserModel.query.filter_by(username=add_permission_username).first()
         if shared_with_user is not None:
             #Check if attempting to add permission to self, ignore if so.
@@ -257,7 +257,7 @@ def account_action(action):
             return Response(status=400)
     elif action == "remove_permission":
         request_data = request.get_json()
-        remove_permission_username = request_data['username']
+        remove_permission_username = request_data['username'].lower()
         delete_row = SharingPermissionModel.query.filter_by(data_owner_id=id,shared_with_username=remove_permission_username).delete(synchronize_session=False)
         db.session.commit()
         app.logger.info('%s removed %s from viewing their location.', username, remove_permission_username)
