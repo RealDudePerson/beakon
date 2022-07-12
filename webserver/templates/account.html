@@ -73,51 +73,81 @@
     </div>
 </div>
 <div class="large-12 cell">
-<div class="callout">
-        <div class="grid-x grid-margin-x">
-        <div class="cell large-4 medium-6 small-12">
-            <label>Remove Access to location. Enter their username.
-                <input type="text" placeholder="username" name="remove_permission_username">
-            </label>
-        </div>
-        <div class="cell large-4 medium-6 small-12">
-            <br>
-            <fieldset class="cell medium-6">
-                <button class="button" type="button" value="Submit" id="remove-access-btn">Revoke Access</button>
-            </fieldset>
+    <div class="callout">
+            <div class="grid-x grid-margin-x">
+            <div class="cell large-4 medium-6 small-12">
+                <label>Remove Access to location. Enter their username.
+                    <input type="text" placeholder="username" name="remove_permission_username">
+                </label>
+            </div>
+            <div class="cell large-4 medium-6 small-12">
+                <br>
+                <fieldset class="cell medium-6">
+                    <button class="button" type="button" value="Submit" id="remove-access-btn">Revoke Access</button>
+                </fieldset>
+            </div>
         </div>
     </div>
 </div>
 
-<div class="callout">
-  <form action="{{url_for('update_token')}}" method="POST" data-abide novalidate>
-      <div class="grid-x grid-margin-x">
-          <div class="cell">
-              <div data-abide-error class="alert callout" style="display: none;">
-                  <p><i class="fi-alert"></i> There are some errors in your form.</p>
-              </div>
-          </div>
-      </div>
-      <div class="grid-x grid-margin-x">
-      <div class="cell large-4 medium-6 small-12">
-          <label>Set API Key. Choose something randomly generated and long. WARNING! SETTING THIS WILL INVALIDATE EXISTING API TOKENS
-              <input type="text" placeholder="api_key" name="secret" required>
-              <span class="form-error">
-              Yo, you had better fill this out, it's required.
-              </span>
-          </label>
-      </div>
-      <div class="cell large-4 medium-6 small-12">
-          <br>
-          <fieldset class="cell medium-6">
-              <button class="button" type="button" value="Submit">Update API Key</button>
-          </fieldset>
-      </div>
-  </form>
-  </div>
+<div class="large-12 cell">
+    <div class="callout">
+        <div class="grid-x grid-margin-x">
+            <div class="cell large-4 medium-6 small-12">
+                <label>Current Password
+                    <input type="password" placeholder="CurrentPassword" name="current_password" id="current_password">
+                </label>
+                <label>New Password
+                    <input type="password" placeholder="NewPassword" name="new_password" id="new_password">
+                </label>
+                <label>Repeat New Password
+                    <input type="password" placeholder="NewPassword" name="new_password_repeat" id="new_password_repeat">
+                </label>
+            </div>
+            <div class="cell large-4 medium-6 small-12">
+                <br>
+                <fieldset class="cell medium-6">
+                    <button class="button" type="button" id="update-password-btn">Update Password</button>
+                </fieldset>
+                <div class="cell medium-6 callout alert hide" id="password_update_error">
+                    
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
+<div class="large-12 cell">
+    <div class="callout">
+        <form action="{{url_for('update_token')}}" method="POST" data-abide novalidate>
+            <div class="grid-x grid-margin-x">
+                <div class="cell">
+                    <div data-abide-error class="alert callout" style="display: none;">
+                        <p><i class="fi-alert"></i> There are some errors in your form.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="grid-x grid-margin-x">
+                <div class="cell large-4 medium-6 small-12">
+                    <label>Set API Key. Choose something randomly generated and long. WARNING! SETTING THIS WILL INVALIDATE EXISTING API TOKENS
+                        <input type="text" placeholder="api_key" name="secret" required>
+                        <span class="form-error">
+                        Yo, you had better fill this out, it's required.
+                        </span>
+                    </label>
+                </div>
+            <div class="cell large-4 medium-6 small-12">
+                <br>
+                <fieldset class="cell medium-6">
+                    <button class="button" type="button" value="Submit">Update API Key</button>
+                </fieldset>
+            </div>
+        </form>
+    </div>
+</div>
+</div>
 
+<div class="large-12 cell">
 {% if sharing_permission_list != Null %}
         <div class="callout">
         <ul id="shared-with-list">
@@ -127,6 +157,7 @@
             {%endfor%}
         </ul>
 {% endif %}
+</div>
 </div>
 </div>
 </div>        

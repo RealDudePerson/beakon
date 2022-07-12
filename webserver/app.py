@@ -290,6 +290,25 @@ def account_action(action):
         db.session.add(userData)
         db.session.commit()
         return Response(status=201)
+    elif action == "update_password":
+        request_data = request.get_json()
+        if 'current_password' in request_data:
+            current_password = request_data['current_password']
+        if 'new_password' in request_data:
+            new_password = request_data['new_password']
+        if current_password and new_password:
+            if current_user.check_password(current_password):
+                current_user.set_password(new_password)
+                app.logger.info('%s updated their password', username)
+                db.session.add(current_user)
+                db.session.commit()
+                return Response(status=201)
+            else:
+                app.logger.info('%s attempted to update their password, but sent a bad current password.', username)
+                return Response(status=401)
+        else:
+            app.logger.info('%s attempted to update their password, but sent a bad request.', username)
+            return Response(status=400)
     else:
         return Response(status=404)
 
