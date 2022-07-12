@@ -1,6 +1,11 @@
 # Beakon
 Beakon is designed to be a self-host location sharing webserver. Beakon aims to leak as little data as possible and uses mostly self-contained libraries and local database files. Where possible, it will reference local files and not reach out over any network. One area where this is not yet easy, is map tiling images.
 
+![Screen Shot 2022-07-07 at 07 23 30](https://user-images.githubusercontent.com/4443705/177797804-51bdda0a-1f21-43f5-8ccd-7c2cae18cedf.png)
+
+
+<img src="https://user-images.githubusercontent.com/4443705/177797819-fe324575-6c5c-4d1d-bad5-356e5855dbef.png" width="300"/>
+
 ## Setup
 Create a [mapbox] account and generate an access token. Place that in the app.cfg file.
 
