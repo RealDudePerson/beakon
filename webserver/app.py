@@ -309,6 +309,11 @@ def account_action(action):
         else:
             app.logger.info('%s attempted to update their password, but sent a bad request.', username)
             return Response(status=400)
+    elif action == "delete_locations":
+        LocationsModel.query.filter_by(userid=id).delete(synchronize_session=False)
+        db.session.commit()
+        app.logger.info('%s deleted their location data.', username)
+        return Response(status=201)
     else:
         return Response(status=404)
 

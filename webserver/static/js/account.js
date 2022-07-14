@@ -2,6 +2,7 @@ var nameUpdateButton = document.querySelector('#name-update-btn');
 var addAccessButton = document.querySelector('#add-access-btn');
 var removeAccessButton = document.querySelector('#remove-access-btn');
 var updatePasswordButton = document.querySelector('#update-password-btn');
+var deleteLocationButton = document.querySelector('#delete-location-btn');
 
 nameUpdateButton.addEventListener('click', function(){
     console.log("NameUpdateButton clicked.");
@@ -118,5 +119,38 @@ updatePasswordButton.addEventListener('click', function(){
         passwordUpdateError.classList.remove('success');
         passwordUpdateError.classList.remove('hide');
         console.log(passwordUpdateError);
+    }
+});
+
+deleteLocationButton.addEventListener('click', function(){
+    console.log("Delete location Button clicked.");
+    let deleteLocationError = document.getElementById("delete-location-error");
+    let deleteInput = document.getElementById("delete-input").value;
+    if(deleteInput.toLowerCase()=='delete'){
+        deleteLocationError.classList.add('hide');
+        let data = {
+            delete: true
+        };
+        console.log(data)
+        fetch("/account/delete_locations", {
+            method: "POST",
+            headers: {'Content-Type': 'application/json'}, 
+            body: JSON.stringify(data)
+        }).then(res => {
+            console.log("Request complete! response:", res); 
+            if(res.status == 201){
+                console.log("Location data deleted.");
+                deleteLocationError.innerHTML = "Location data deleted.";
+                deleteLocationError.classList.remove('alert');
+                deleteLocationError.classList.add('success');
+                deleteLocationError.classList.remove('hide');
+            }
+        });
+    }else{
+        console.log("Type 'delete' in the text box if you want to remove location data.");
+        deleteLocationError.innerHTML = "Type 'delete' in the text box if you want to remove location data.";
+        deleteLocationError.classList.add('alert');
+        deleteLocationError.classList.remove('success');
+        deleteLocationError.classList.remove('hide');
     }
 });
