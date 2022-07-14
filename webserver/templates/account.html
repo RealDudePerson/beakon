@@ -119,6 +119,27 @@
 
 <div class="large-12 cell">
     <div class="callout">
+        <div class="grid-x grid-margin-x">
+            <div class="cell large-4 medium-6 small-12">
+                <label>To delete all location data type 'delete' below and press delete.
+                    <input type="text" placeholder="" name="delete-input" id="delete-input">
+                </label>
+            </div>
+            <div class="cell large-4 medium-6 small-12">
+                <br>
+                <fieldset class="cell medium-6">
+                    <button class="button" type="button" id="delete-location-btn">Delete</button>
+                </fieldset>
+                <div class="cell medium-6 callout alert hide" id="delete-location-error">
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="large-12 cell">
+    <div class="callout">
         <form action="{{url_for('update_token')}}" method="POST" data-abide novalidate>
             <div class="grid-x grid-margin-x">
                 <div class="cell">
