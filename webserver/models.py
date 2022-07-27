@@ -41,6 +41,8 @@ class LocationsModel(db.Model):
     acc = db.Column(db.Float())
     timestamp = db.Column(db.DateTime())
     userid = db.Column(db.Integer)
+    batt = db.Column(db.Integer)
+    ischarging = db.Column(db.Boolean)
 
     def set_lat(self, lat):
         self.lat = lat
@@ -62,6 +64,14 @@ class LocationsModel(db.Model):
         self.userid = userid
     def get_userid(self):
         return self.userid
+    def get_batt(self):
+        return self.batt
+    def set_batt(self, batt):
+        self.batt = batt
+    def get_ischarging(self):
+        return self.ischarging
+    def set_ischarging(self, ischarging):
+        self.ischarging = ischarging
 
 
 class UserDataModel(db.Model):
