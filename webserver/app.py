@@ -79,8 +79,10 @@ def dashboard():
     if location is not None:
         lat = location.get_lat()
         lon = location.get_lon()
+        batt = location.get_batt()
+        ischarging = location.get_ischarging()
         timestamp = location.get_timestamp()
-        return render_template('dashboard.html',username=username,fname=fname,lname=lname,lat=lat,lon=lon,timestamp=timestamp,mapboxapi=app.config['MAPBOX_API_KEY'],sharing_permission_list=sharing_permission_list,sharing_permission_count=sharing_permission_count)
+        return render_template('dashboard.html',username=username,fname=fname,lname=lname,lat=lat,lon=lon,timestamp=timestamp,mapboxapi=app.config['MAPBOX_API_KEY'],sharing_permission_list=sharing_permission_list,sharing_permission_count=sharing_permission_count,batt=batt,ischarging=ischarging)
     return render_template('dashboard.html',fname=fname,lname=lname,username=username,sharing_permission_count=sharing_permission_count,sharing_permission_list=sharing_permission_list)
 
 # Used for seeing userid
@@ -188,16 +190,28 @@ def api_record_location():
                 lat = request_data['lat']
                 lon = request_data['lon']
                 acc = request_data['acc']
+                batt = False
+                if 'batt' in request_data:
+                    batt = request_data['batt']
+                    app.logger.debug('batt is %s', batt)
+                ischarging = False
+                if 'ischarging' in request_data:
+                    ischarging = request_data['ischarging'] in ['true','True']
+                    app.logger.debug('ischarging is %s', ischarging)
                 location = LocationsModel()
                 location.set_lat(lat)
                 location.set_lon(lon)
                 location.set_acc(acc)
                 location.set_timestamp(datetime.now())
                 location.set_userid(user.get_id())
+                if batt:
+                    location.set_batt(batt)
+                if ischarging:
+                    location.set_ischarging(ischarging)
                 db.session.add(location)
                 db.session.commit()
                 status_code = Response(status=201)
-                app.logger.info('%s updated their API token.', username)
+                app.logger.info('%s updated their Location.', username)
                 return status_code
     return status_code
 
@@ -344,7 +358,9 @@ def map(map_username):
                 lat = location.get_lat()
                 lon = location.get_lon()
                 timestamp = location.get_timestamp()
-                return render_template('map.html',fname=fname,lname=lname,lat=lat,lon=lon,timestamp=timestamp,mapboxapi=app.config['MAPBOX_API_KEY'])
+                batt = location.get_batt()
+                ischarging = location.get_ischarging()
+                return render_template('map.html',fname=fname,lname=lname,lat=lat,lon=lon,timestamp=timestamp,mapboxapi=app.config['MAPBOX_API_KEY'],batt=batt,ischarging=ischarging)
             return render_template('map.html',fname=fname,lname=lname) #TODO make template for no location stored yet
         else:
             return redirect('/dashboard')
@@ -355,4 +371,4 @@ if __name__ == '__main__':
     @app.before_first_request
     def create_table():
         db.create_all()
-    app.run()
+    app.run(ssl_context="adhoc",host='0.0.0.0')

@@ -45,6 +45,9 @@
           <li>Last updated: {{ timestamp }}</li>
           <li>Lat: {{ lat }}</li>
           <li>Lon: {{ lon }}</li>
+          {% if batt != Null %}
+          <li>Battery: {{ batt }}{% if ischarging == true %}⚡{% endif %}%
+          {% endif %}
       </ul>
       </div>
       {% endif %}
