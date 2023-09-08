@@ -353,11 +353,24 @@ def map(map_username):
             except:
                 lname = None
             location = LocationsModel.query.filter_by(userid=map_user.get_id()).order_by(LocationsModel.id.desc()).first()
-            app.logger.debug('%s removed ', location)
+            app.logger.info("%s viewed %s's location", username, map_username)
             if location is not None:
                 lat = location.get_lat()
                 lon = location.get_lon()
                 timestamp = location.get_timestamp()
+                diff = datetime.now() - timestamp
+                if (diff.seconds < 86400):
+                    hours_ago = diff.seconds//3600
+                    if hours_ago ==1:
+                        timestamp = str(diff.seconds//3600) + " hour ago"
+                    else:
+                        timestamp = str(diff.seconds//3600) + " hours ago"
+                if (diff.seconds < 3600):
+                    minutes_ago = diff.seconds//60
+                    if minutes_ago==1:
+                        timestamp = str(diff.seconds//60) + " minute ago"
+                    else:
+                        timestamp = str(diff.seconds//60) + " minutes ago"
                 batt = location.get_batt()
                 ischarging = location.get_ischarging()
                 return render_template('map.html',fname=fname,lname=lname,lat=lat,lon=lon,timestamp=timestamp,mapboxapi=app.config['MAPBOX_API_KEY'],batt=batt,ischarging=ischarging)
