@@ -45,6 +45,7 @@
           <li>Last updated: {{ timestamp }}</li>
           <li>Lat: {{ lat }}</li>
           <li>Lon: {{ lon }}</li>
+          <li><a href="https://maps.google.com/?q={{lat}},{{lon}}">Google Map Location</a></li>
           {% if batt != Null %}
           <li>Battery: {{ batt }}{% if ischarging == true %}⚡{% endif %}%
           {% endif %}
