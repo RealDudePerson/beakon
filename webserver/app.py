@@ -7,11 +7,42 @@ from models import UserModel,db,login,UserDataModel,LocationsModel,SharingPermis
 from flask_login import login_required, current_user, login_user, logout_user
 from datetime import datetime
 
-app = Flask(__name__)
+def ensure_paths(app):
+    """Ensure required directories exist per Python standards."""
+    # Use instance folder for config, database, and logs (PEP 668)
+    instance_path = app.instance_path
+    os.makedirs(instance_path, exist_ok=True)
 
-# Set up logging
+    # Create logs subdirectory
+    logs_path = os.path.join(instance_path, 'logs')
+    os.makedirs(logs_path, exist_ok=True)
+
+    # Check for config file, create default if missing
+    config_path = os.path.join(instance_path, 'app.cfg')
+    if not os.path.exists(config_path):
+        # Copy default config from package if it exists
+        default_config = os.path.join(os.path.dirname(__file__), 'app.cfg')
+        if os.path.exists(default_config):
+            import shutil
+            shutil.copy(default_config, config_path)
+        else:
+            # Create minimal default config
+            with open(config_path, 'w') as f:
+                f.write("# Auto-generated config\nSECRET_KEY = 'changeme'\nMAPBOX_API_KEY = ''\n")
+
+    return instance_path, logs_path, config_path
+
+app = Flask(__name__)
+app.config['INSTANCE_PATH'] = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'instance')
+
+# Ensure instance directory and config exist before loading config
+ensure_paths(app)
+
+# Set up logging to instance/logs/
 app.logger_name = "WEBSRVR"
-file_handler = RotatingFileHandler(os.path.join(app.instance_path, 'beakon_webserver.log'), 'a', 1 * 1024 * 1024, 10)
+logs_path = os.path.join(app.instance_path, 'logs')
+os.makedirs(logs_path, exist_ok=True)
+file_handler = RotatingFileHandler(os.path.join(logs_path, 'beakon.log'), 'a', 1 * 1024 * 1024, 10)
 file_handler.setLevel(logging.DEBUG)
 file_handler.setFormatter(logging.Formatter('%(asctime)s [%(process)-5d:%(thread)#x] %(name)s %(levelname)-5s %(message)s [in %(module)s @ %(pathname)s:%(lineno)d]'))
 app.logger.addHandler(file_handler)
@@ -20,11 +51,11 @@ app.logger.setLevel(logging.DEBUG)
 # Start log
 app.logger.info('------------ Starting logs')
 app.logger.info('__name__ is \'%s\'' % __name__)
+app.logger.info('Instance path: %s', app.instance_path)
 
-# Load app.config variables from file
-resource_path = os.path.dirname(os.path.realpath(os.path.abspath(sys.argv[0]))) + os.sep + 'resource'
-app.logger.debug('Looking for custom app config in \'%s\'' % os.path.join(app.instance_path, 'app.cfg'))
-app.config.from_pyfile('app.cfg')
+# Load app.config from instance folder (already validated by ensure_paths)
+app.logger.debug('Loading config from \'%s\'', os.path.join(app.instance_path, 'app.cfg'))
+app.config.from_pyfile('app.cfg', silent=False)
 
 # Initiate the database and login
 db.init_app(app)
