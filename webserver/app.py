@@ -85,16 +85,16 @@ def dashboard():
         diff = datetime.now() - timestamp
         if (diff.days < 1):
             hours_ago = diff.seconds//3600
-            if hours_ago ==1:
-                timestamp = str(diff.seconds//3600) + " hour ago"
+            if hours_ago == 1:
+                timestamp = str(hours_ago) + " hour ago"
             else:
-                timestamp = str(diff.seconds//3600) + " hours ago"
-        if (diff.seconds < 3600):
+                timestamp = str(hours_ago) + " hours ago"
+        elif (diff.seconds < 3600):
             minutes_ago = diff.seconds//60
-            if minutes_ago==1:
-                timestamp = str(diff.seconds//60) + " minute ago"
+            if minutes_ago == 1:
+                timestamp = str(minutes_ago) + " minute ago"
             else:
-                timestamp = str(diff.seconds//60) + " minutes ago"
+                timestamp = str(minutes_ago) + " minutes ago"
         return render_template('dashboard.html',username=username,fname=fname,lname=lname,lat=lat,lon=lon,timestamp=timestamp,mapboxapi=app.config['MAPBOX_API_KEY'],sharing_permission_list=sharing_permission_list,sharing_permission_count=sharing_permission_count,batt=batt,ischarging=ischarging)
     return render_template('dashboard.html',fname=fname,lname=lname,username=username,sharing_permission_count=sharing_permission_count,sharing_permission_list=sharing_permission_list)
 
@@ -374,16 +374,16 @@ def map(map_username):
                 diff = datetime.now() - timestamp
                 if (diff.days < 1):
                     hours_ago = diff.seconds//3600
-                    if hours_ago ==1:
-                        timestamp = str(diff.seconds//3600) + " hour ago"
+                    if hours_ago == 1:
+                        timestamp = str(hours_ago) + " hour ago"
                     else:
-                        timestamp = str(diff.seconds//3600) + " hours ago"
-                if (diff.seconds < 3600):
+                        timestamp = str(hours_ago) + " hours ago"
+                elif (diff.seconds < 3600):
                     minutes_ago = diff.seconds//60
-                    if minutes_ago==1:
-                        timestamp = str(diff.seconds//60) + " minute ago"
+                    if minutes_ago == 1:
+                        timestamp = str(minutes_ago) + " minute ago"
                     else:
-                        timestamp = str(diff.seconds//60) + " minutes ago"
+                        timestamp = str(minutes_ago) + " minutes ago"
                 batt = location.get_batt()
                 ischarging = location.get_ischarging()
                 return render_template('map.html',fname=fname,lname=lname,lat=lat,lon=lon,timestamp=timestamp,mapboxapi=app.config['MAPBOX_API_KEY'],batt=batt,ischarging=ischarging)
