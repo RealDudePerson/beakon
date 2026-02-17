@@ -89,7 +89,7 @@ def dashboard():
                 timestamp = str(hours_ago) + " hour ago"
             else:
                 timestamp = str(hours_ago) + " hours ago"
-        elif (diff.seconds < 3600):
+        if (diff.seconds < 3600):
             minutes_ago = diff.seconds//60
             if minutes_ago == 1:
                 timestamp = str(minutes_ago) + " minute ago"
@@ -378,7 +378,7 @@ def map(map_username):
                         timestamp = str(hours_ago) + " hour ago"
                     else:
                         timestamp = str(hours_ago) + " hours ago"
-                elif (diff.seconds < 3600):
+                if (diff.seconds < 3600):
                     minutes_ago = diff.seconds//60
                     if minutes_ago == 1:
                         timestamp = str(minutes_ago) + " minute ago"
