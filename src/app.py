@@ -17,23 +17,17 @@ def ensure_paths(app):
     logs_path = os.path.join(instance_path, 'logs')
     os.makedirs(logs_path, exist_ok=True)
 
-    # Check for config file, create default if missing
-    config_path = os.path.join(instance_path, 'app.cfg')
+    # Check for config file in project root
+    project_root = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    config_path = os.path.join(project_root, 'config.cfg')
     if not os.path.exists(config_path):
-        # Copy default config from package if it exists
-        default_config = os.path.join(os.path.dirname(__file__), 'app.cfg')
-        if os.path.exists(default_config):
-            import shutil
-            shutil.copy(default_config, config_path)
-        else:
-            # Create minimal default config
-            with open(config_path, 'w') as f:
-                f.write("# Auto-generated config\nSECRET_KEY = 'changeme'\nMAPBOX_API_KEY = ''\n")
+        # Create minimal default config
+        with open(config_path, 'w') as f:
+            f.write("# Auto-generated config\nSECRET_KEY = 'changeme'\nMAPBOX_API_KEY = ''\n")
 
     return instance_path, logs_path, config_path
 
-app = Flask(__name__)
-app.config['INSTANCE_PATH'] = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'instance')
+app = Flask(__name__, template_folder='../templates', static_folder='../static', instance_path=os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'instance'))
 
 # Ensure instance directory and config exist before loading config
 ensure_paths(app)
@@ -53,9 +47,21 @@ app.logger.info('------------ Starting logs')
 app.logger.info('__name__ is \'%s\'' % __name__)
 app.logger.info('Instance path: %s', app.instance_path)
 
-# Load app.config from instance folder (already validated by ensure_paths)
-app.logger.debug('Loading config from \'%s\'', os.path.join(app.instance_path, 'app.cfg'))
-app.config.from_pyfile('app.cfg', silent=False)
+# Load app.config from project root config file
+project_root = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+config_path = os.path.join(project_root, 'config.cfg')
+app.logger.debug('Loading config from \'%s\'', config_path)
+
+# Read config file manually and set values
+with open(config_path, 'r') as f:
+    for line in f:
+        line = line.strip()
+        if line and not line.startswith('#') and '=' in line:
+            key, value = line.split('=', 1)
+            key = key.strip()
+            value = value.strip().strip("'\"")
+            if key and value:
+                app.config[key] = value
 
 # Initiate the database and login
 db.init_app(app)
