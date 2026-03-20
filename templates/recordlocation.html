@@ -1,0 +1,96 @@
+{% extends "layout.html" %}
+{% block title %}Record Location{% endblock %}
+{% block content %}
+<div class="grid-x grid-padding-x">
+  <div class="large-12 cell">
+    <h1>Welcome to Beakon</h1>
+  </div>
+  <div class="large-12 cell">
+      <div class="callout primary">
+          This page will constantly poll your location and update the database.
+      </div>
+    </div>
+</div>
+
+<div class="grid-x grid-padding-x">
+  <div class="large-12 cell">
+    <div class="callout">
+      
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block script %}
+    <script>
+        function locationSuccess(position) {
+            const latitude = position.coords.latitude;
+            console.log(latitude);
+            const longitude = position.coords.longitude;
+            console.log(longitude);
+            const altitude = position.coords.altitude;
+            console.log(altitude);
+            const accuracy = position.coords.accuracy;
+            console.log(accuracy);
+            const altitudeAccuracy = position.coords.altitudeAccuracy;
+            console.log(altitudeAccuracy);
+            const heading = position.coords.height;
+            console.log(heading);
+            const speed = position.coords.speed;
+            console.log(speed)
+            const timestamp = position.timestamp;
+            console.log(timestamp);
+            let data = {
+                lat: latitude,
+                lon: longitude,
+                acc: accuracy
+            };
+            console.log(data);
+            fetch("/recordlocation", {
+                method: "POST",
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify(data)
+            }).then(res => {
+                console.log("Request complete! response:", res);
+            });
+
+            // work with this information however you'd like!
+        }
+    
+        function locationError(error) {
+            const code = error.code;
+            const message = error.message;
+    
+            // read the code and message and decide how you want to handle this!
+        }
+        
+        navigator.geolocation.watchPosition(locationSuccess, locationError);
+
+        /*
+        function handlePermission() {
+        navigator.permissions.query({name:'geolocation'}).then(function(result) {
+          if (result.state == 'granted') {
+            report(result.state);
+            geoBtn.style.display = 'none';
+          } else if (result.state == 'prompt') {
+            report(result.state);
+            geoBtn.style.display = 'none';
+            navigator.geolocation.getCurrentPosition(revealPosition,positionDenied,geoSettings);
+          } else if (result.state == 'denied') {
+            report(result.state);
+            geoBtn.style.display = 'inline';
+          }
+          result.onchange = function() {
+            report(result.state);
+          }
+        });
+        }
+
+        function report(state) {
+          console.log('Permission ' + state);
+        }
+
+        handlePermission();
+        */
+    </script>
+{% endblock %}
+

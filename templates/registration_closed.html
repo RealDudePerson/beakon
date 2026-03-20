@@ -1,0 +1,18 @@
+{% extends "layout.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block top_menu_buttons %}
+<li><a href="{{ url_for('login') }}" class="button">Login</a></li>
+{% endblock %}
+{% block content %}
+<div class="grid-x grid-padding-x">
+  <div class="large-12 cell">
+    <h1>Welcome to Beakon</h1>
+  </div>
+  <div class="large-12 cell">
+      <div class="callout primary">
+          Unfortunately for you registrations on this server are closed.
+      </div>
+    </div>
+</div>
+</div>
+{% endblock %}
