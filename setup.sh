@@ -174,6 +174,26 @@ print('Database initialized successfully')
 
 print_success "Database initialized"
 
+print_header "Test Data (Optional)"
+
+echo -e "Populate the database with test users and locations?"
+echo -e "Creates 3 users: ${YELLOW}alice${NC}, ${YELLOW}bob${NC}, ${YELLOW}charlie${NC} (password: test123)"
+echo -e "Includes ~15 locations per user and sharing permissions."
+echo ""
+
+if prompt_yes_no "Populate test data?"; then
+    print_info "Seeding test data..."
+    $PYTHON -c "
+import sys
+sys.path.insert(0, 'src')
+from app import app, seed_test_data
+with app.app_context():
+    seed_test_data()
+print('Test data seeded successfully')
+"
+    print_success "Test data populated"
+fi
+
 print_header "Systemd Service (Optional)"
 
 echo -e "A systemd service allows Beakon to run automatically on boot."
