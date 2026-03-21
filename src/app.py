@@ -1,11 +1,68 @@
 import logging
 import os
 import sys
+import math
+import random
 from logging.handlers import RotatingFileHandler
 from flask import Flask, render_template, request, redirect, session, Response
 from models import UserModel,db,login,UserDataModel,LocationsModel,SharingPermissionModel
 from flask_login import login_required, current_user, login_user, logout_user
-from datetime import datetime
+from datetime import datetime, timedelta
+
+def seed_test_data():
+    if UserModel.query.filter_by(username='alice').first():
+        return
+    users = [
+        {'username': 'alice', 'fname': 'Alice', 'lname': 'Smith'},
+        {'username': 'bob', 'fname': 'Bob', 'lname': 'Jones'},
+        {'username': 'charlie', 'fname': 'Charlie', 'lname': 'Brown'},
+    ]
+    for u in users:
+        user = UserModel(username=u['username'])
+        user.set_password('test123')
+        db.session.add(user)
+        db.session.commit()
+        
+        user_data = UserDataModel(id=user.get_id(), fname=u['fname'], lname=u['lname'])
+        db.session.add(user_data)
+        db.session.commit()
+    
+    base_lat, base_lon = 37.7749, -122.4194
+    
+    for i, u in enumerate(users):
+        user = UserModel.query.filter_by(username=u['username']).first()
+        for j in range(15):
+            lat = base_lat + (i * 0.01) + (j * 0.001)
+            lon = base_lon + (j * 0.001)
+            location = LocationsModel()
+            location.set_lat(lat)
+            location.set_lon(lon)
+            location.set_acc(random.uniform(5, 50))
+            location.set_timestamp(datetime.now() - timedelta(days=14) + timedelta(hours=j * 2))
+            location.set_userid(user.get_id())
+            location.set_batt(random.randint(20, 100))
+            location.set_ischarging(random.choice([True, False]))
+            db.session.add(location)
+        db.session.commit()
+    
+    alice = UserModel.query.filter_by(username='alice').first()
+    bob = UserModel.query.filter_by(username='bob').first()
+    charlie = UserModel.query.filter_by(username='charlie').first()
+    
+    perm1 = SharingPermissionModel()
+    perm1.set_data_owner_username('alice')
+    perm1.set_data_owner_id(alice.get_id())
+    perm1.set_shared_with_username('bob')
+    perm1.set_shared_with_id(bob.get_id())
+    db.session.add(perm1)
+    
+    perm2 = SharingPermissionModel()
+    perm2.set_data_owner_username('bob')
+    perm2.set_data_owner_id(bob.get_id())
+    perm2.set_shared_with_username('charlie')
+    perm2.set_shared_with_id(charlie.get_id())
+    db.session.add(perm2)
+    db.session.commit()
 
 def ensure_paths(app):
     """Ensure required directories exist per Python standards."""
