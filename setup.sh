@@ -213,23 +213,21 @@ if prompt_yes_no "Do you want to install a systemd service?"; then
 
     SERVICE_FILE="$SERVICE_DIR/beakon.service"
 
-    cat > "$SERVICE_FILE" << 'SERVICEOF'
+    cat > "$SERVICE_FILE" << EOF
 [Unit]
 Description=Beakon Location Sharing Server
 After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=%s
-ExecStart=%s/.venv/bin/python -c "import sys; sys.path.insert(0, 'src'); from app import app; app.run(host='0.0.0.0', ssl_context='adhoc')"
+WorkingDirectory=$SCRIPT_DIR
+ExecStart=$SCRIPT_DIR/.venv/bin/python -c "import sys; sys.path.insert(0, 'src'); from app import app; app.run(host='0.0.0.0', ssl_context='adhoc')"
 Restart=on-failure
 RestartSec=5
 
 [Install]
 WantedBy=default.target
-SERVICEOF
-
-    printf "$SERVICE_FILE" "$SCRIPT_DIR" "$SCRIPT_DIR" > "$SERVICE_FILE"
+EOF
 
     if [ "$NEEDS_SUDO" = true ]; then
         sudo systemctl daemon-reload
