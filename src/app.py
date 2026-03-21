@@ -64,6 +64,43 @@ def seed_test_data():
     db.session.add(perm2)
     db.session.commit()
 
+def haversine_meters(lat1, lon1, lat2, lon2):
+    R = 6371000
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    delta_phi = math.radians(lat2 - lat1)
+    delta_lambda = math.radians(lon2 - lon1)
+    a = math.sin(delta_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2) ** 2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return R * c
+
+def get_filtered_locations(userid, max_locations=10, min_distance_meters=91):
+    locations = LocationsModel.query.filter_by(userid=userid).order_by(LocationsModel.id.desc()).all()
+    filtered = []
+    for loc in locations:
+        if len(filtered) >= max_locations:
+            break
+        if not filtered:
+            filtered.append(loc)
+        else:
+            prev = filtered[-1]
+            dist = haversine_meters(prev.get_lat(), prev.get_lon(), loc.get_lat(), loc.get_lon())
+            if dist >= min_distance_meters:
+                filtered.append(loc)
+    return filtered
+
+def format_timestamp(ts):
+    diff = datetime.now() - ts
+    if diff.days < 1:
+        hours_ago = diff.seconds // 3600
+        if hours_ago >= 1:
+            return f"{hours_ago} hour{'s' if hours_ago != 1 else ''} ago"
+        minutes_ago = diff.seconds // 60
+        if minutes_ago >= 1:
+            return f"{minutes_ago} minute{'s' if minutes_ago != 1 else ''} ago"
+        return "just now"
+    return str(ts)
+
 def ensure_paths(app):
     """Ensure required directories exist per Python standards."""
     # Use instance folder for config, database, and logs (PEP 668)
@@ -160,7 +197,8 @@ def dashboard():
     else:
         fname = ""
         lname = ""
-    location = LocationsModel.query.filter_by(userid=id).order_by(LocationsModel.id.desc()).first()
+    
+    locations = get_filtered_locations(id)
     sharing_permission = SharingPermissionModel.query.filter_by(shared_with_id=id).all()
     if sharing_permission:
         sharing_permission_count = len(sharing_permission)
@@ -170,27 +208,39 @@ def dashboard():
     for user in sharing_permission:
         username = user.get_data_owner_username()
         sharing_permission_list.append(username)
-    if location is not None:
+    
+    if locations:
+        location = locations[0]
         lat = location.get_lat()
         lon = location.get_lon()
         batt = location.get_batt()
         ischarging = location.get_ischarging()
-        timestamp = location.get_timestamp()
-        diff = datetime.now() - timestamp
-        if (diff.days < 1):
-            hours_ago = diff.seconds//3600
-            if hours_ago == 1:
-                timestamp = str(hours_ago) + " hour ago"
-            else:
-                timestamp = str(hours_ago) + " hours ago"
-        if (diff.seconds < 3600):
-            minutes_ago = diff.seconds//60
-            if minutes_ago == 1:
-                timestamp = str(minutes_ago) + " minute ago"
-            else:
-                timestamp = str(minutes_ago) + " minutes ago"
-        return render_template('dashboard.html',username=username,fname=fname,lname=lname,lat=lat,lon=lon,timestamp=timestamp,mapboxapi=app.config['MAPBOX_API_KEY'],sharing_permission_list=sharing_permission_list,sharing_permission_count=sharing_permission_count,batt=batt,ischarging=ischarging)
-    return render_template('dashboard.html',fname=fname,lname=lname,username=username,sharing_permission_count=sharing_permission_count,sharing_permission_list=sharing_permission_list)
+        timestamp = format_timestamp(location.get_timestamp())
+        
+        locations_data = []
+        for i, loc in enumerate(locations):
+            locations_data.append({
+                'lat': loc.get_lat(),
+                'lon': loc.get_lon(),
+                'timestamp': format_timestamp(loc.get_timestamp()),
+                'batt': loc.get_batt(),
+                'ischarging': loc.get_ischarging(),
+                'index': i
+            })
+        
+        return render_template('dashboard.html',
+            username=username, fname=fname, lname=lname,
+            lat=lat, lon=lon, timestamp=timestamp,
+            mapboxapi=app.config['MAPBOX_API_KEY'],
+            sharing_permission_list=sharing_permission_list,
+            sharing_permission_count=sharing_permission_count,
+            batt=batt, ischarging=ischarging,
+            locations=locations_data)
+    
+    return render_template('dashboard.html',
+        fname=fname, lname=lname, username=username,
+        sharing_permission_count=sharing_permission_count,
+        sharing_permission_list=sharing_permission_list)
 
 # Used for seeing userid
 @app.route('/checkid')
@@ -444,11 +494,9 @@ def account_action(action):
 def map(map_username):
     id = current_user.get_id()
     username = UserModel.query.filter_by(id=id).first().get_username()
-    #Verify user record exists otherwise redirect to dashbaord
     map_user = UserModel.query.filter_by(username=map_username).first()
     if map_user is not None:
         map_user_data = UserDataModel.query.filter_by(id=map_user.get_id()).first()
-        #Verify that Sharing Permission record exists before showing content, otherwise redirect to dashboard
         has_permission = SharingPermissionModel.query.filter_by(data_owner_id=map_user.get_id(),shared_with_id=id).first()
         if has_permission is not None:
             try:
@@ -459,29 +507,35 @@ def map(map_username):
                 lname = map_user_data.get_lname()
             except:
                 lname = None
-            location = LocationsModel.query.filter_by(userid=map_user.get_id()).order_by(LocationsModel.id.desc()).first()
+            
+            locations = get_filtered_locations(map_user.get_id())
             app.logger.info("%s viewed %s's location", username, map_username)
-            if location is not None:
+            
+            if locations:
+                location = locations[0]
                 lat = location.get_lat()
                 lon = location.get_lon()
-                timestamp = location.get_timestamp()
-                diff = datetime.now() - timestamp
-                if (diff.days < 1):
-                    hours_ago = diff.seconds//3600
-                    if hours_ago == 1:
-                        timestamp = str(hours_ago) + " hour ago"
-                    else:
-                        timestamp = str(hours_ago) + " hours ago"
-                if (diff.seconds < 3600):
-                    minutes_ago = diff.seconds//60
-                    if minutes_ago == 1:
-                        timestamp = str(minutes_ago) + " minute ago"
-                    else:
-                        timestamp = str(minutes_ago) + " minutes ago"
+                timestamp = format_timestamp(location.get_timestamp())
                 batt = location.get_batt()
                 ischarging = location.get_ischarging()
-                return render_template('map.html',fname=fname,lname=lname,lat=lat,lon=lon,timestamp=timestamp,mapboxapi=app.config['MAPBOX_API_KEY'],batt=batt,ischarging=ischarging)
-            return render_template('map.html',fname=fname,lname=lname) #TODO make template for no location stored yet
+                
+                locations_data = []
+                for i, loc in enumerate(locations):
+                    locations_data.append({
+                        'lat': loc.get_lat(),
+                        'lon': loc.get_lon(),
+                        'timestamp': format_timestamp(loc.get_timestamp()),
+                        'batt': loc.get_batt(),
+                        'ischarging': loc.get_ischarging(),
+                        'index': i
+                    })
+                
+                return render_template('map.html',
+                    fname=fname, lname=lname, lat=lat, lon=lon,
+                    timestamp=timestamp, mapboxapi=app.config['MAPBOX_API_KEY'],
+                    batt=batt, ischarging=ischarging, locations=locations_data)
+            
+            return render_template('map.html', fname=fname, lname=lname)
         else:
             return redirect('/dashboard')
     else:
