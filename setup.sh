@@ -221,7 +221,7 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=%s
-ExecStart=%s/.venv/bin/python -c "import sys; sys.path.insert(0, 'src'); from app import app; app.run()"
+ExecStart=%s/.venv/bin/python -c "import sys; sys.path.insert(0, 'src'); from app import app; app.run(host='0.0.0.0', ssl_context='adhoc')"
 Restart=on-failure
 RestartSec=5
 
