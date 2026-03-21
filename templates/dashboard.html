@@ -14,7 +14,6 @@
 <div class="grid-x grid-padding-x">
   <div class="large-9 medium-9 cell">
     <h5>Map {% if fname != Null %} of {{fname}} {{lname}} {% endif %}</h5>
-    
 
     <div class="grid-x grid-padding-x">
       <div class="large-12 cell">
@@ -31,7 +30,7 @@
       <div class="grid-x grid-padding-x">
     </div>
   </div>
-  
+
   <div class="large-3 medium-3 cell">
       <h5>Stats</h5>
       {% if fname != Null %}
@@ -79,10 +78,29 @@
             zoomOffset: -1,
             accessToken: '{{mapboxapi}}'
         }).addTo(map);
-        var mapMarker = L.marker([{{lat}},{{lon}}],{
-            title: "{{fname}} {{lname}}"
+
+        var locations = {{ locations|tojson }};
+
+        locations.forEach(function(loc, idx) {
+            var isNewest = idx === 0;
+            var size = isNewest ? 16 : 12 - (idx * 0.8);
+            var hue = 210 - (idx * 15);
+
+            var icon = L.divIcon({
+                className: 'custom-marker',
+                html: '<div style="width:' + size + 'px;height:' + size + 'px;background:hsl(' + hue + ', 80%, 50%);border:2px solid white;border-radius:50%;box-shadow:0 2px 4px rgba(0,0,0,0.3);"></div>',
+                iconSize: [size, size],
+                iconAnchor: [size/2, size/2]
+            });
+
+            var marker = L.marker([loc.lat, loc.lon], {icon: icon});
+            marker.bindPopup('<b>' + (isNewest ? 'Current Location' : 'Location ' + (idx + 1)) + '</b><br>' + loc.timestamp);
+            marker.addTo(map);
         });
-        mapMarker.addTo(map);
+
+        if (locations.length > 0) {
+            map.setView([locations[0].lat, locations[0].lon], 13);
+        }
     </script>
 {% endif %}
 {% endblock %}

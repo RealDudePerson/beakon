@@ -1,11 +1,105 @@
 import logging
 import os
 import sys
+import math
+import random
 from logging.handlers import RotatingFileHandler
 from flask import Flask, render_template, request, redirect, session, Response
 from models import UserModel,db,login,UserDataModel,LocationsModel,SharingPermissionModel
 from flask_login import login_required, current_user, login_user, logout_user
-from datetime import datetime
+from datetime import datetime, timedelta
+
+def seed_test_data():
+    if UserModel.query.filter_by(username='alice').first():
+        return
+    users = [
+        {'username': 'alice', 'fname': 'Alice', 'lname': 'Smith'},
+        {'username': 'bob', 'fname': 'Bob', 'lname': 'Jones'},
+        {'username': 'charlie', 'fname': 'Charlie', 'lname': 'Brown'},
+    ]
+    for u in users:
+        user = UserModel(username=u['username'])
+        user.set_password('test123')
+        db.session.add(user)
+        db.session.commit()
+        
+        user_data = UserDataModel(id=user.get_id(), fname=u['fname'], lname=u['lname'])
+        db.session.add(user_data)
+        db.session.commit()
+    
+    base_lat, base_lon = 37.7749, -122.4194
+    
+    for i, u in enumerate(users):
+        user = UserModel.query.filter_by(username=u['username']).first()
+        for j in range(15):
+            lat = base_lat + (i * 0.01) + (j * 0.001)
+            lon = base_lon + (j * 0.001)
+            location = LocationsModel()
+            location.set_lat(lat)
+            location.set_lon(lon)
+            location.set_acc(random.uniform(5, 50))
+            location.set_timestamp(datetime.now() - timedelta(days=14) + timedelta(hours=j * 2))
+            location.set_userid(user.get_id())
+            location.set_batt(random.randint(20, 100))
+            location.set_ischarging(random.choice([True, False]))
+            db.session.add(location)
+        db.session.commit()
+    
+    alice = UserModel.query.filter_by(username='alice').first()
+    bob = UserModel.query.filter_by(username='bob').first()
+    charlie = UserModel.query.filter_by(username='charlie').first()
+    
+    perm1 = SharingPermissionModel()
+    perm1.set_data_owner_username('alice')
+    perm1.set_data_owner_id(alice.get_id())
+    perm1.set_shared_with_username('bob')
+    perm1.set_shared_with_id(bob.get_id())
+    db.session.add(perm1)
+    
+    perm2 = SharingPermissionModel()
+    perm2.set_data_owner_username('bob')
+    perm2.set_data_owner_id(bob.get_id())
+    perm2.set_shared_with_username('charlie')
+    perm2.set_shared_with_id(charlie.get_id())
+    db.session.add(perm2)
+    db.session.commit()
+
+def haversine_meters(lat1, lon1, lat2, lon2):
+    R = 6371000
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    delta_phi = math.radians(lat2 - lat1)
+    delta_lambda = math.radians(lon2 - lon1)
+    a = math.sin(delta_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2) ** 2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return R * c
+
+def get_filtered_locations(userid, max_locations=10, min_distance_meters=91):
+    locations = LocationsModel.query.filter_by(userid=userid).order_by(LocationsModel.id.desc()).all()
+    filtered = []
+    for loc in locations:
+        if len(filtered) >= max_locations:
+            break
+        if not filtered:
+            filtered.append(loc)
+        else:
+            prev = filtered[-1]
+            dist = haversine_meters(prev.get_lat(), prev.get_lon(), loc.get_lat(), loc.get_lon())
+            if dist >= min_distance_meters:
+                filtered.append(loc)
+    return filtered
+
+def format_timestamp(ts):
+    diff = datetime.now() - ts
+    if diff.days < 1:
+        hours_ago = diff.seconds // 3600
+        if hours_ago >= 1:
+            return f"{hours_ago} hour{'s' if hours_ago != 1 else ''} ago"
+        minutes_ago = diff.seconds // 60
+        if minutes_ago >= 1:
+            return f"{minutes_ago} minute{'s' if minutes_ago != 1 else ''} ago"
+        return "just now"
+    return str(ts)
 
 def ensure_paths(app):
     """Ensure required directories exist per Python standards."""
@@ -103,7 +197,8 @@ def dashboard():
     else:
         fname = ""
         lname = ""
-    location = LocationsModel.query.filter_by(userid=id).order_by(LocationsModel.id.desc()).first()
+    
+    locations = get_filtered_locations(id)
     sharing_permission = SharingPermissionModel.query.filter_by(shared_with_id=id).all()
     if sharing_permission:
         sharing_permission_count = len(sharing_permission)
@@ -113,27 +208,39 @@ def dashboard():
     for user in sharing_permission:
         username = user.get_data_owner_username()
         sharing_permission_list.append(username)
-    if location is not None:
+    
+    if locations:
+        location = locations[0]
         lat = location.get_lat()
         lon = location.get_lon()
         batt = location.get_batt()
         ischarging = location.get_ischarging()
-        timestamp = location.get_timestamp()
-        diff = datetime.now() - timestamp
-        if (diff.days < 1):
-            hours_ago = diff.seconds//3600
-            if hours_ago == 1:
-                timestamp = str(hours_ago) + " hour ago"
-            else:
-                timestamp = str(hours_ago) + " hours ago"
-        if (diff.seconds < 3600):
-            minutes_ago = diff.seconds//60
-            if minutes_ago == 1:
-                timestamp = str(minutes_ago) + " minute ago"
-            else:
-                timestamp = str(minutes_ago) + " minutes ago"
-        return render_template('dashboard.html',username=username,fname=fname,lname=lname,lat=lat,lon=lon,timestamp=timestamp,mapboxapi=app.config['MAPBOX_API_KEY'],sharing_permission_list=sharing_permission_list,sharing_permission_count=sharing_permission_count,batt=batt,ischarging=ischarging)
-    return render_template('dashboard.html',fname=fname,lname=lname,username=username,sharing_permission_count=sharing_permission_count,sharing_permission_list=sharing_permission_list)
+        timestamp = format_timestamp(location.get_timestamp())
+        
+        locations_data = []
+        for i, loc in enumerate(locations):
+            locations_data.append({
+                'lat': loc.get_lat(),
+                'lon': loc.get_lon(),
+                'timestamp': format_timestamp(loc.get_timestamp()),
+                'batt': loc.get_batt(),
+                'ischarging': loc.get_ischarging(),
+                'index': i
+            })
+        
+        return render_template('dashboard.html',
+            username=username, fname=fname, lname=lname,
+            lat=lat, lon=lon, timestamp=timestamp,
+            mapboxapi=app.config['MAPBOX_API_KEY'],
+            sharing_permission_list=sharing_permission_list,
+            sharing_permission_count=sharing_permission_count,
+            batt=batt, ischarging=ischarging,
+            locations=locations_data)
+    
+    return render_template('dashboard.html',
+        fname=fname, lname=lname, username=username,
+        sharing_permission_count=sharing_permission_count,
+        sharing_permission_list=sharing_permission_list)
 
 # Used for seeing userid
 @app.route('/checkid')
@@ -387,11 +494,9 @@ def account_action(action):
 def map(map_username):
     id = current_user.get_id()
     username = UserModel.query.filter_by(id=id).first().get_username()
-    #Verify user record exists otherwise redirect to dashbaord
     map_user = UserModel.query.filter_by(username=map_username).first()
     if map_user is not None:
         map_user_data = UserDataModel.query.filter_by(id=map_user.get_id()).first()
-        #Verify that Sharing Permission record exists before showing content, otherwise redirect to dashboard
         has_permission = SharingPermissionModel.query.filter_by(data_owner_id=map_user.get_id(),shared_with_id=id).first()
         if has_permission is not None:
             try:
@@ -402,29 +507,35 @@ def map(map_username):
                 lname = map_user_data.get_lname()
             except:
                 lname = None
-            location = LocationsModel.query.filter_by(userid=map_user.get_id()).order_by(LocationsModel.id.desc()).first()
+            
+            locations = get_filtered_locations(map_user.get_id())
             app.logger.info("%s viewed %s's location", username, map_username)
-            if location is not None:
+            
+            if locations:
+                location = locations[0]
                 lat = location.get_lat()
                 lon = location.get_lon()
-                timestamp = location.get_timestamp()
-                diff = datetime.now() - timestamp
-                if (diff.days < 1):
-                    hours_ago = diff.seconds//3600
-                    if hours_ago == 1:
-                        timestamp = str(hours_ago) + " hour ago"
-                    else:
-                        timestamp = str(hours_ago) + " hours ago"
-                if (diff.seconds < 3600):
-                    minutes_ago = diff.seconds//60
-                    if minutes_ago == 1:
-                        timestamp = str(minutes_ago) + " minute ago"
-                    else:
-                        timestamp = str(minutes_ago) + " minutes ago"
+                timestamp = format_timestamp(location.get_timestamp())
                 batt = location.get_batt()
                 ischarging = location.get_ischarging()
-                return render_template('map.html',fname=fname,lname=lname,lat=lat,lon=lon,timestamp=timestamp,mapboxapi=app.config['MAPBOX_API_KEY'],batt=batt,ischarging=ischarging)
-            return render_template('map.html',fname=fname,lname=lname) #TODO make template for no location stored yet
+                
+                locations_data = []
+                for i, loc in enumerate(locations):
+                    locations_data.append({
+                        'lat': loc.get_lat(),
+                        'lon': loc.get_lon(),
+                        'timestamp': format_timestamp(loc.get_timestamp()),
+                        'batt': loc.get_batt(),
+                        'ischarging': loc.get_ischarging(),
+                        'index': i
+                    })
+                
+                return render_template('map.html',
+                    fname=fname, lname=lname, lat=lat, lon=lon,
+                    timestamp=timestamp, mapboxapi=app.config['MAPBOX_API_KEY'],
+                    batt=batt, ischarging=ischarging, locations=locations_data)
+            
+            return render_template('map.html', fname=fname, lname=lname)
         else:
             return redirect('/dashboard')
     else:
