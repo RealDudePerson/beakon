@@ -9,6 +9,13 @@
   vertical-align: middle;
 }
 
+.version-badge {
+  font-size: 0.75rem;
+  color: #c6d1d8;
+  margin-left: 0.5rem;
+  font-weight: normal;
+}
+
 .topbar-responsive .menu {
   background: #2c3840;
 }
