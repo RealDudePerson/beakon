@@ -25,6 +25,7 @@
                 <button class="menu-icon" type="button" data-toggle></button>
                 </span>
                 <a class="topbar-responsive-logo" href="{{ url_for('index') }}"><strong>Beakon</strong></a>
+                {% if VERSION %}<span class="version-badge">{{ VERSION }}</span>{% endif %}
             </div>
             <div id="topbar-responsive" class="topbar-responsive-links">
                 <div class="top-bar-right">

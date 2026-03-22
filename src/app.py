@@ -157,6 +157,10 @@ with open(config_path, 'r') as f:
             if key and value:
                 app.config[key] = value
 
+@app.context_processor
+def inject_version():
+    return {'VERSION': app.config.get('VERSION', 'unknown')}
+
 # Initiate the database and login
 db.init_app(app)
 login.init_app(app)
