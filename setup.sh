@@ -148,6 +148,8 @@ MAPBOX_API_KEY = '$MAPBOX_API_KEY'
 REGISTRATION_ENABLED = True
 
 SECRET_KEY = '$SECRET_KEY'
+
+VERSION = '$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")'
 EOF
 
 print_success "Configuration saved to config.cfg"
