@@ -376,6 +376,68 @@ def api_record_location():
                 return status_code
     return status_code
 
+@app.route('/api/locations', methods=['GET'])
+@login_required
+def api_get_locations():
+    id = current_user.get_id()
+    username = UserModel.query.filter_by(id=id).first().get_username()
+    app.logger.debug('%s fetched their own locations via API', username)
+    locations = get_filtered_locations(id)
+    if locations:
+        latest = locations[0]
+        return {
+            'locations': [{
+                'lat': loc.get_lat(),
+                'lon': loc.get_lon(),
+                'timestamp': format_timestamp(loc.get_timestamp()),
+                'batt': loc.get_batt(),
+                'ischarging': loc.get_ischarging()
+            } for loc in locations],
+            'latest': {
+                'lat': latest.get_lat(),
+                'lon': latest.get_lon(),
+                'timestamp': format_timestamp(latest.get_timestamp()),
+                'batt': latest.get_batt(),
+                'ischarging': latest.get_ischarging()
+            }
+        }
+    return {'locations': [], 'latest': None}
+
+@app.route('/api/locations/<map_username>', methods=['GET'])
+@login_required
+def api_get_user_locations(map_username):
+    id = current_user.get_id()
+    username = UserModel.query.filter_by(id=id).first().get_username()
+    map_user = UserModel.query.filter_by(username=map_username).first()
+    if map_user is None:
+        return {'error': 'User not found'}, 404
+    has_permission = SharingPermissionModel.query.filter_by(
+        data_owner_id=map_user.get_id(), shared_with_id=id
+    ).first()
+    if has_permission is None:
+        return {'error': 'Permission denied'}, 403
+    app.logger.info("%s viewed %s's location via API", username, map_username)
+    locations = get_filtered_locations(map_user.get_id())
+    if locations:
+        latest = locations[0]
+        return {
+            'locations': [{
+                'lat': loc.get_lat(),
+                'lon': loc.get_lon(),
+                'timestamp': format_timestamp(loc.get_timestamp()),
+                'batt': loc.get_batt(),
+                'ischarging': loc.get_ischarging()
+            } for loc in locations],
+            'latest': {
+                'lat': latest.get_lat(),
+                'lon': latest.get_lon(),
+                'timestamp': format_timestamp(latest.get_timestamp()),
+                'batt': latest.get_batt(),
+                'ischarging': latest.get_ischarging()
+            }
+        }
+    return {'locations': [], 'latest': None}
+
 # This is where account information can be set and updated
 # including adding and removing location permissions
 # setting API Token
