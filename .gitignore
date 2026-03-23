@@ -3,6 +3,7 @@ instance/
 
 # ignore our virtual environment
 venv/
+.venv/
 
 #---- PyCharm ----
 .idea
