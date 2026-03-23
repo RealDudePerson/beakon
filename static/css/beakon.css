@@ -134,3 +134,95 @@
   }
 }
 
+.speed-page {
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 1rem 0;
+}
+
+.speedometer-container {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.speedometer-svg {
+  width: 100%;
+  max-width: 280px;
+  height: auto;
+}
+
+.speed-label {
+  font-size: 10px;
+  fill: #666;
+  font-family: sans-serif;
+}
+
+.speed-display {
+  margin-top: -10px;
+}
+
+.speed-value {
+  font-size: 4rem;
+  font-weight: bold;
+  color: #2c3840;
+  line-height: 1;
+}
+
+.speed-unit {
+  font-size: 1.5rem;
+  color: #666;
+  margin-left: 0.25rem;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.metric-card {
+  background: #f5f5f5;
+  border-radius: 8px;
+  padding: 1rem;
+  text-align: center;
+}
+
+.metric-card.full-width {
+  grid-column: span 2;
+}
+
+.metric-label {
+  display: block;
+  font-size: 0.75rem;
+  color: #888;
+  margin-bottom: 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.metric-value {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #2c3840;
+}
+
+.status-message {
+  text-align: center;
+  font-size: 0.875rem;
+  color: #888;
+  padding: 0.5rem;
+  border-radius: 4px;
+  background: #f0f0f0;
+}
+
+.status-message.active {
+  color: #4CAF50;
+  background: #e8f5e9;
+}
+
+.status-message.error {
+  color: #F44336;
+  background: #ffebee;
+}
+

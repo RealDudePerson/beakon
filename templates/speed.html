@@ -1,0 +1,189 @@
+{% extends "layout.html" %}
+{% block title %}Speed{% endblock %}
+{% block top_menu_buttons %}
+{% endblock %}
+{% block content %}
+<div class="speed-page">
+    <div class="speedometer-container">
+        <svg viewBox="0 0 200 120" class="speedometer-svg">
+            <defs>
+                <linearGradient id="greenGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" style="stop-color:#4CAF50;stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:#4CAF50;stop-opacity:0.7" />
+                </linearGradient>
+                <linearGradient id="yellowGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" style="stop-color:#FFC107;stop-opacity:0.7" />
+                    <stop offset="100%" style="stop-color:#FFC107;stop-opacity:1" />
+                </linearGradient>
+                <linearGradient id="redGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" style="stop-color:#F44336;stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:#F44336;stop-opacity:1" />
+                </linearGradient>
+            </defs>
+            
+            <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#333" stroke-width="2"/>
+            
+            <path d="M 20 100 A 80 80 0 0 1 57 34" fill="none" stroke="#4CAF50" stroke-width="12" stroke-linecap="round"/>
+            <path d="M 57 34 A 80 80 0 0 1 100 20" fill="none" stroke="#FFC107" stroke-width="12" stroke-linecap="round"/>
+            <path d="M 100 20 A 80 80 0 0 1 180 100" fill="none" stroke="#F44336" stroke-width="12" stroke-linecap="round"/>
+            
+            <text x="25" y="95" class="speed-label">0</text>
+            <text x="93" y="18" class="speed-label">20</text>
+            <text x="170" y="95" class="speed-label">40</text>
+            
+            <g id="needle-group">
+                <line id="needle" x1="100" y1="100" x2="100" y2="35" stroke="#222" stroke-width="3" stroke-linecap="round" transform="rotate(-90, 100, 100)"/>
+                <circle cx="100" cy="100" r="8" fill="#222"/>
+                <circle cx="100" cy="100" r="4" fill="#666"/>
+            </g>
+        </svg>
+        
+        <div class="speed-display">
+            <span id="current-speed" class="speed-value">0</span>
+            <span class="speed-unit">MPH</span>
+        </div>
+    </div>
+    
+    <div class="metrics-grid">
+        <div class="metric-card">
+            <span class="metric-label">MAX</span>
+            <span id="max-speed" class="metric-value">0 MPH</span>
+        </div>
+        <div class="metric-card">
+            <span class="metric-label">DIR</span>
+            <span id="direction" class="metric-value">--</span>
+        </div>
+        <div class="metric-card full-width">
+            <span class="metric-label">DISTANCE</span>
+            <span id="distance" class="metric-value">0.00 mi</span>
+        </div>
+    </div>
+    
+    <div id="status-message" class="status-message">Requesting GPS access...</div>
+</div>
+{% endblock %}
+{% block script %}
+<script>
+(function() {
+    var currentSpeed = 0;
+    var maxSpeed = 0;
+    var totalDistance = 0;
+    var lastPosition = null;
+    var watchId = null;
+    var trackingActive = false;
+    
+    var needle = document.getElementById('needle');
+    var currentSpeedEl = document.getElementById('current-speed');
+    var maxSpeedEl = document.getElementById('max-speed');
+    var directionEl = document.getElementById('direction');
+    var distanceEl = document.getElementById('distance');
+    var statusEl = document.getElementById('status-message');
+    
+    var MAX_MPH = 40;
+    
+    function toRadians(deg) {
+        return deg * Math.PI / 180;
+    }
+    
+    function haversineDistance(lat1, lon1, lat2, lon2) {
+        var R = 3958.8;
+        var dLat = toRadians(lat2 - lat1);
+        var dLon = toRadians(lon2 - lon1);
+        var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    }
+    
+    function getCompassDirection(heading) {
+        if (heading === null || heading === undefined) return '--';
+        var directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+        var idx = Math.round(heading / 22.5) % 16;
+        return directions[idx];
+    }
+    
+    function updateNeedle(speedMph) {
+        var angle = -90 + (speedMph / MAX_MPH) * 180;
+        angle = Math.max(-90, Math.min(90, angle));
+        needle.setAttribute('transform', 'rotate(' + angle + ', 100, 100)');
+    }
+    
+    function updateDisplay(speedMph, heading, distanceMi) {
+        currentSpeedEl.textContent = Math.round(speedMph);
+        maxSpeedEl.textContent = Math.round(speedMph) + ' MPH';
+        directionEl.textContent = getCompassDirection(heading);
+        distanceEl.textContent = distanceMi.toFixed(2) + ' mi';
+        updateNeedle(speedMph);
+    }
+    
+    function handlePosition(position) {
+        var speedMph = 0;
+        if (position.speed !== null) {
+            speedMph = position.speed * 2.237;
+        }
+        
+        var heading = position.coords.heading;
+        
+        if (lastPosition !== null) {
+            var dist = haversineDistance(
+                lastPosition.latitude, lastPosition.longitude,
+                position.coords.latitude, position.coords.longitude
+            );
+            totalDistance += dist;
+        }
+        
+        lastPosition = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude
+        };
+        
+        if (speedMph > maxSpeed) {
+            maxSpeed = speedMph;
+        }
+        
+        updateDisplay(speedMph, heading, totalDistance);
+        
+        if (!trackingActive) {
+            trackingActive = true;
+            statusEl.textContent = 'Tracking active';
+            statusEl.classList.add('active');
+        }
+    }
+    
+    function handleError(error) {
+        var messages = {
+            1: 'Location permission denied',
+            2: 'Location unavailable',
+            3: 'Location request timeout',
+            0: 'Location error'
+        };
+        statusEl.textContent = messages[error.code] || 'GPS error';
+        statusEl.classList.add('error');
+    }
+    
+    function startTracking() {
+        if (watchId !== null) return;
+        
+        if ('geolocation' in navigator) {
+            statusEl.textContent = 'Acquiring GPS...';
+            
+            watchId = navigator.geolocation.watchPosition(
+                handlePosition,
+                handleError,
+                {
+                    enableHighAccuracy: true,
+                    maximumAge: 1000,
+                    timeout: 15000
+                }
+            );
+        } else {
+            statusEl.textContent = 'Geolocation not supported';
+            statusEl.classList.add('error');
+        }
+    }
+    
+    startTracking();
+})();
+</script>
+{% endblock %}
