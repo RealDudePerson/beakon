@@ -10,4 +10,4 @@ jinja2>=3.1.6
 MarkupSafe==2.1.1
 pycparser==2.21
 SQLAlchemy==1.4.36
-Werkzeug==2.1.2
+Werkzeug>=3.1.6
