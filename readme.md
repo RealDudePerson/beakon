@@ -54,7 +54,7 @@ Headers:
 
 Body:
 
-> {"lat":"%LAT","lon":"%LON","acc":"%ACC"}
+> {"lat":"%LAT","lon":"%LON","acc":"%ACC","batt":"%BATT"}
 
 
 [mapbox]: https://www.mapbox.com/
