@@ -150,6 +150,8 @@ REGISTRATION_ENABLED = True
 SECRET_KEY = '$SECRET_KEY'
 
 VERSION = '$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")'
+
+LOCATION_REFRESH_INTERVAL = 10
 EOF
 
 print_success "Configuration saved to config.cfg"

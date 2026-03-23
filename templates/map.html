@@ -25,13 +25,13 @@
       <h6>{{fname}} {{lname}}</h6>
       {% if lat != Null %}
       <div class="callout">
-      <ul>
-          <li>Last updated: {{ timestamp }}</li>
-          <li>Lat: {{ lat }}</li>
-          <li>Lon: {{ lon }}</li>
-          <li><a href="https://maps.google.com/?q={{lat}},{{lon}}">Google Map Location</a></li>
+      <ul id="stats-panel">
+          <li>Last updated: <span id="stat-timestamp">{{ timestamp }}</span></li>
+          <li>Lat: <span id="stat-lat">{{ lat }}</span></li>
+          <li>Lon: <span id="stat-lon">{{ lon }}</span></li>
+          <li><a id="stat-gmap" href="https://maps.google.com/?q={{lat}},{{lon}}">Google Map Location</a></li>
           {% if batt != Null %}
-          <li>Battery: {{ batt }}{% if ischarging == true %}⚡{% endif %}%
+          <li>Battery: <span id="stat-batt">{{ batt }}</span>{% if ischarging == true %}⚡{% endif %}%
           {% endif %}
       </ul>
       </div>
@@ -59,27 +59,81 @@
             accessToken: '{{mapboxapi}}'
         }).addTo(map);
 
-        var locations = {{ locations|tojson }};
+        var markersLayer = L.layerGroup().addTo(map);
 
-        locations.forEach(function(loc, idx) {
+        function createIcon(idx, total) {
             var isNewest = idx === 0;
             var size = isNewest ? 16 : 12 - (idx * 0.8);
             var hue = 210 - (idx * 15);
-
-            var icon = L.divIcon({
+            return L.divIcon({
                 className: 'custom-marker',
                 html: '<div style="width:' + size + 'px;height:' + size + 'px;background:hsl(' + hue + ', 80%, 50%);border:2px solid white;border-radius:50%;box-shadow:0 2px 4px rgba(0,0,0,0.3);"></div>',
                 iconSize: [size, size],
                 iconAnchor: [size/2, size/2]
             });
+        }
 
-            var marker = L.marker([loc.lat, loc.lon], {icon: icon});
-            marker.bindPopup('<b>' + (isNewest ? 'Current Location' : 'Location ' + (idx + 1)) + '</b><br>' + loc.timestamp);
-            marker.addTo(map);
+        function updateMap(locations) {
+            markersLayer.clearLayers();
+            locations.forEach(function(loc, idx) {
+                var marker = L.marker([loc.lat, loc.lon], {icon: createIcon(idx, locations.length)});
+                marker.bindPopup('<b>' + (idx === 0 ? 'Current Location' : 'Location ' + (idx + 1)) + '</b><br>' + loc.timestamp);
+                markersLayer.addLayer(marker);
+            });
+            if (locations.length > 0) {
+                map.panTo([locations[0].lat, locations[0].lon], {animate: true, duration: 1});
+            }
+        }
+
+        function updateStats(latest) {
+            if (!latest) return;
+            document.getElementById('stat-timestamp').textContent = latest.timestamp;
+            document.getElementById('stat-lat').textContent = latest.lat;
+            document.getElementById('stat-lon').textContent = latest.lon;
+            document.getElementById('stat-gmap').href = 'https://maps.google.com/?q=' + latest.lat + ',' + latest.lon;
+            var battSpan = document.getElementById('stat-batt');
+            if (battSpan) {
+                battSpan.textContent = latest.batt;
+            }
+        }
+
+        var initialLocations = {{ locations|tojson }};
+        updateMap(initialLocations);
+
+        var refreshInterval = null;
+        var REFRESH_INTERVAL_MS = 10000;
+        var MAP_USERNAME = '{{ map_username }}';
+
+        function startRefresh() {
+            if (refreshInterval) return;
+            refreshInterval = setInterval(function() {
+                fetch('/api/locations/' + MAP_USERNAME)
+                    .then(function(response) { return response.json(); })
+                    .then(function(data) {
+                        if (data.locations && data.locations.length > 0) {
+                            updateMap(data.locations);
+                            updateStats(data.latest);
+                        }
+                    })
+                    .catch(function(err) { console.error('Auto-refresh error:', err); });
+            }, REFRESH_INTERVAL_MS);
+        }
+
+        function stopRefresh() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+                refreshInterval = null;
+            }
+        }
+
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                stopRefresh();
+            } else {
+                startRefresh();
+            }
         });
 
-        if (locations.length > 0) {
-            map.setView([locations[0].lat, locations[0].lon], 13);
-        }
+        startRefresh();
     </script>
 {% endblock %}
