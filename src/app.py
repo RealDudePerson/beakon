@@ -607,6 +607,10 @@ def map(map_username):
     else:
         return redirect('/dashboard')
 
+@app.route('/speed')
+def speed():
+    return render_template('speed.html')
+
 if __name__ == '__main__':
     @app.before_first_request
     def create_table():
