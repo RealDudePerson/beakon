@@ -80,6 +80,9 @@
   .topbar-responsive .top-bar-title span .menu-icon {
     margin-bottom: 4px;
   }
+  .version-badge {
+    display: none;
+  }
 }
 
 @-webkit-keyframes fadeIn {
