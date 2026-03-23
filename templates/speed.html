@@ -69,6 +69,7 @@
     var maxSpeed = 0;
     var totalDistance = 0;
     var lastPosition = null;
+    var lastTimestamp = null;
     var watchId = null;
     var trackingActive = false;
     
@@ -119,29 +120,43 @@
     
     function handlePosition(position) {
         var speedMph = 0;
-        if (position.speed !== null) {
-            speedMph = position.speed * 2.237;
-        }
-        
         var heading = position.coords.heading;
-        
-        if (lastPosition !== null) {
+        var currentLat = position.coords.latitude;
+        var currentLon = position.coords.longitude;
+        var currentTimestamp = position.timestamp;
+
+        if (lastPosition !== null && lastTimestamp !== null) {
             var dist = haversineDistance(
                 lastPosition.latitude, lastPosition.longitude,
-                position.coords.latitude, position.coords.longitude
+                currentLat, currentLon
             );
             totalDistance += dist;
+
+            var timeDeltaMs = currentTimestamp - lastTimestamp;
+            if (timeDeltaMs > 0) {
+                var timeDeltaHours = timeDeltaMs / (1000 * 60 * 60);
+                speedMph = dist / timeDeltaHours;
+            }
         }
-        
-        lastPosition = {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude
-        };
-        
+
+        if (lastPosition !== null) {
+            lastPosition = {
+                latitude: currentLat,
+                longitude: currentLon
+            };
+            lastTimestamp = currentTimestamp;
+        } else {
+            lastPosition = {
+                latitude: currentLat,
+                longitude: currentLon
+            };
+            lastTimestamp = currentTimestamp;
+        }
+
         if (speedMph > maxSpeed) {
             maxSpeed = speedMph;
         }
-        
+
         updateDisplay(speedMph, heading, totalDistance);
         
         if (!trackingActive) {
