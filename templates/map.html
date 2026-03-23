@@ -60,6 +60,7 @@
         }).addTo(map);
 
         var markersLayer = L.layerGroup().addTo(map);
+        var locationsLayer = L.layerGroup().addTo(map);
 
         function createIcon(idx, total) {
             var isNewest = idx === 0;
@@ -75,6 +76,21 @@
 
         function updateMap(locations) {
             markersLayer.clearLayers();
+            locationsLayer.clearLayers();
+            for (var i = 0; i < locations.length - 1; i++) {
+                var hue = 210 - (i * 15);
+                var isDashed = i >= 3;
+                var segment = L.polyline([
+                    [locations[i].lat, locations[i].lon],
+                    [locations[i+1].lat, locations[i+1].lon]
+                ], {
+                    color: 'hsl(' + hue + ', 80%, 50%)',
+                    weight: 3,
+                    opacity: 0.8,
+                    dashArray: isDashed ? '5, 5' : null
+                });
+                locationsLayer.addLayer(segment);
+            }
             locations.forEach(function(loc, idx) {
                 var marker = L.marker([loc.lat, loc.lon], {icon: createIcon(idx, locations.length)});
                 marker.bindPopup('<b>' + (idx === 0 ? 'Current Location' : 'Location ' + (idx + 1)) + '</b><br>' + loc.timestamp);
