@@ -13,9 +13,13 @@
         <div style="margin-bottom: 10px;">
           <input type="text" id="date-picker" placeholder="Select date to view path">
         </div>
+        {% if lat != Null %}
         <div class="responsive-embed">
           <div id="map"></div>
         </div>
+        {% else %}
+            No location data available for {{fname}} {{lname}}.
+        {% endif %}
         <hr />
       </div>
     </div>
@@ -51,9 +55,10 @@
 </div>
 {% endblock %}
 {% block script %}
+{% if lat != Null %}
     <script>
         var map = L.map('map').setView([{{lat}}, {{lon}}], 13);
-        L.tileLayer('https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token=' + '{{mapboxapi}}', {
+        L.tileLayer('https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={{mapboxapi}}', {
             attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Imagery © <a href="https://www.mapbox.com/">Mapbox</a>',
             maxZoom: 18,
             id: 'mapbox/streets-v11',
@@ -207,4 +212,5 @@
 
         startRefresh();
     </script>
+{% endif %}
 {% endblock %}

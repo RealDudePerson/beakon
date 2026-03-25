@@ -627,7 +627,8 @@ def map(map_username):
                 return render_template('map.html',
                     fname=fname, lname=lname, lat=lat, lon=lon,
                     timestamp=timestamp, mapboxapi=app.config['MAPBOX_API_KEY'],
-                    batt=batt, ischarging=ischarging, locations=locations_data)
+                    batt=batt, ischarging=ischarging, locations=locations_data,
+                    map_username=map_username)
             
             return render_template('map.html', fname=fname, lname=lname)
         else:
