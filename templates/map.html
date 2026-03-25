@@ -138,12 +138,13 @@
                 locationsLayer.addLayer(segment);
             }
             filtered.forEach(function(loc, idx) {
+                var isNewest = idx === filtered.length - 1;
                 var marker = L.marker([loc.lat, loc.lon], {icon: createIcon(idx, filtered.length)});
-                marker.bindPopup('<b>' + (idx === 0 ? 'Current Location' : 'Location ' + (idx + 1)) + '</b><br>' + loc.timestamp);
+                marker.bindPopup('<b>' + (isNewest ? 'Current Location' : 'Location ' + (filtered.length - idx)) + '</b><br>' + loc.timestamp);
                 markersLayer.addLayer(marker);
             });
-            if (filtered.length > 0) {
-                map.panTo([filtered[0].lat, filtered[0].lon], {animate: true, duration: 1});
+            if (filtered.length > 0 && !selectedDate) {
+                map.panTo([filtered[filtered.length - 1].lat, filtered[filtered.length - 1].lon], {animate: true, duration: 1});
             }
         }
 
