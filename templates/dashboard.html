@@ -14,9 +14,11 @@
 <div class="grid-x grid-padding-x">
   <div class="large-9 medium-9 cell">
     <h5>Map {% if fname != Null %} of {{fname}} {{lname}} {% endif %}</h5>
-
     <div class="grid-x grid-padding-x">
       <div class="large-12 cell">
+        <div style="margin-bottom: 10px;">
+          <input type="text" id="date-picker" placeholder="Select date to view path">
+        </div>
         {% if lat != Null %}
         <div class="responsive-embed">
           <div id="map"></div>
@@ -82,6 +84,43 @@
         var markersLayer = L.layerGroup().addTo(map);
         var locationsLayer = L.layerGroup().addTo(map);
 
+        flatpickr('#date-picker', {
+            defaultDate: null,
+            allowInput: true,
+            altInput: true,
+            altFormat: 'F j, Y',
+            dateFormat: 'Y-m-d',
+            maxDate: 'today'
+        });
+
+        function haversineMeters(lat1, lon1, lat2, lon2) {
+            var R = 6371000;
+            var phi1 = lat1 * Math.PI / 180;
+            var phi2 = lat2 * Math.PI / 180;
+            var deltaPhi = (lat2 - lat1) * Math.PI / 180;
+            var deltaLambda = (lon2 - lon1) * Math.PI / 180;
+            var a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+                    Math.cos(phi1) * Math.cos(phi2) *
+                    Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+            var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
+
+        function clusterLocations(locations) {
+            if (locations.length === 0) return [];
+            var clustered = [locations[0]];
+            for (var i = 1; i < locations.length; i++) {
+                var curr = locations[i];
+                var prev = clustered[clustered.length - 1];
+                var dist = haversineMeters(prev.lat, prev.lon, curr.lat, curr.lon);
+                var timeDiff = (new Date(curr.timestamp) - new Date(prev.timestamp)) / 1000 / 60;
+                if (dist >= 50 || timeDiff >= 5) {
+                    clustered.push(curr);
+                }
+            }
+            return clustered;
+        }
+
         function createIcon(idx, total) {
             var isNewest = idx === 0;
             var size = isNewest ? 16 : 12 - (idx * 0.8);
@@ -97,12 +136,13 @@
         function updateMap(locations) {
             markersLayer.clearLayers();
             locationsLayer.clearLayers();
-            for (var i = 0; i < locations.length - 1; i++) {
+            var filtered = clusterLocations(locations);
+            for (var i = 0; i < filtered.length - 1; i++) {
                 var hue = 210 - (i * 15);
                 var isDashed = i >= 3;
                 var segment = L.polyline([
-                    [locations[i].lat, locations[i].lon],
-                    [locations[i+1].lat, locations[i+1].lon]
+                    [filtered[i].lat, filtered[i].lon],
+                    [filtered[i+1].lat, filtered[i+1].lon]
                 ], {
                     color: 'hsl(' + hue + ', 80%, 50%)',
                     weight: 3,
@@ -111,13 +151,13 @@
                 });
                 locationsLayer.addLayer(segment);
             }
-            locations.forEach(function(loc, idx) {
-                var marker = L.marker([loc.lat, loc.lon], {icon: createIcon(idx, locations.length)});
+            filtered.forEach(function(loc, idx) {
+                var marker = L.marker([loc.lat, loc.lon], {icon: createIcon(idx, filtered.length)});
                 marker.bindPopup('<b>' + (idx === 0 ? 'Current Location' : 'Location ' + (idx + 1)) + '</b><br>' + loc.timestamp);
                 markersLayer.addLayer(marker);
             });
-            if (locations.length > 0) {
-                map.panTo([locations[0].lat, locations[0].lon], {animate: true, duration: 1});
+            if (filtered.length > 0) {
+                map.panTo([filtered[0].lat, filtered[0].lon], {animate: true, duration: 1});
             }
         }
 
@@ -138,19 +178,37 @@
 
         var refreshInterval = null;
         var REFRESH_INTERVAL_MS = 10000;
+        var selectedDate = null;
+
+        function fetchLocations() {
+            var url = '/api/locations';
+            if (selectedDate) {
+                url += '?date=' + selectedDate;
+            }
+            return fetch(url)
+                .then(function(response) { return response.json(); })
+                .then(function(data) {
+                    if (data.locations && data.locations.length > 0) {
+                        updateMap(data.locations);
+                        updateStats(data.latest);
+                    }
+                })
+                .catch(function(err) { console.error('Fetch error:', err); });
+        }
+
+        document.getElementById('date-picker').addEventListener('change', function(e) {
+            selectedDate = e.target.value;
+            if (selectedDate) {
+                fetchLocations();
+            } else {
+                fetchLocations();
+            }
+        });
 
         function startRefresh() {
             if (refreshInterval) return;
             refreshInterval = setInterval(function() {
-                fetch('/api/locations')
-                    .then(function(response) { return response.json(); })
-                    .then(function(data) {
-                        if (data.locations && data.locations.length > 0) {
-                            updateMap(data.locations);
-                            updateStats(data.latest);
-                        }
-                    })
-                    .catch(function(err) { console.error('Auto-refresh error:', err); });
+                fetchLocations();
             }, REFRESH_INTERVAL_MS);
         }
 
