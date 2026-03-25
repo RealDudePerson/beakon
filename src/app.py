@@ -74,6 +74,16 @@ def haversine_meters(lat1, lon1, lat2, lon2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
 
+def get_locations_for_date(userid, date_str):
+    date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
+    start_of_day = datetime.combine(date_obj, datetime.min.time())
+    end_of_day = datetime.combine(date_obj, datetime.max.time())
+    return LocationsModel.query.filter(
+        LocationsModel.userid == userid,
+        LocationsModel.timestamp >= start_of_day,
+        LocationsModel.timestamp <= end_of_day
+    ).order_by(LocationsModel.timestamp.asc()).all()
+
 def get_filtered_locations(userid, max_locations=10, min_distance_meters=91):
     locations = LocationsModel.query.filter_by(userid=userid).order_by(LocationsModel.id.desc()).all()
     filtered = []
@@ -89,7 +99,9 @@ def get_filtered_locations(userid, max_locations=10, min_distance_meters=91):
                 filtered.append(loc)
     return filtered
 
-def format_timestamp(ts):
+def format_timestamp(ts, time_only=False):
+    if time_only:
+        return ts.strftime('%H:%M:%S')
     diff = datetime.now() - ts
     if diff.days < 1:
         hours_ago = diff.seconds // 3600
@@ -382,21 +394,29 @@ def api_get_locations():
     id = current_user.get_id()
     username = UserModel.query.filter_by(id=id).first().get_username()
     app.logger.debug('%s fetched their own locations via API', username)
-    locations = get_filtered_locations(id)
+    
+    date_str = request.args.get('date')
+    if date_str:
+        locations = get_locations_for_date(id, date_str)
+        time_only = True
+    else:
+        locations = get_filtered_locations(id)
+        time_only = False
+    
     if locations:
-        latest = locations[0]
+        latest = locations[-1] if date_str else locations[0]
         return {
             'locations': [{
                 'lat': loc.get_lat(),
                 'lon': loc.get_lon(),
-                'timestamp': format_timestamp(loc.get_timestamp()),
+                'timestamp': format_timestamp(loc.get_timestamp(), time_only),
                 'batt': loc.get_batt(),
                 'ischarging': loc.get_ischarging()
             } for loc in locations],
             'latest': {
                 'lat': latest.get_lat(),
                 'lon': latest.get_lon(),
-                'timestamp': format_timestamp(latest.get_timestamp()),
+                'timestamp': format_timestamp(latest.get_timestamp(), time_only),
                 'batt': latest.get_batt(),
                 'ischarging': latest.get_ischarging()
             }
@@ -417,21 +437,29 @@ def api_get_user_locations(map_username):
     if has_permission is None:
         return {'error': 'Permission denied'}, 403
     app.logger.info("%s viewed %s's location via API", username, map_username)
-    locations = get_filtered_locations(map_user.get_id())
+    
+    date_str = request.args.get('date')
+    if date_str:
+        locations = get_locations_for_date(map_user.get_id(), date_str)
+        time_only = True
+    else:
+        locations = get_filtered_locations(map_user.get_id())
+        time_only = False
+    
     if locations:
-        latest = locations[0]
+        latest = locations[-1] if date_str else locations[0]
         return {
             'locations': [{
                 'lat': loc.get_lat(),
                 'lon': loc.get_lon(),
-                'timestamp': format_timestamp(loc.get_timestamp()),
+                'timestamp': format_timestamp(loc.get_timestamp(), time_only),
                 'batt': loc.get_batt(),
                 'ischarging': loc.get_ischarging()
             } for loc in locations],
             'latest': {
                 'lat': latest.get_lat(),
                 'lon': latest.get_lon(),
-                'timestamp': format_timestamp(latest.get_timestamp()),
+                'timestamp': format_timestamp(latest.get_timestamp(), time_only),
                 'batt': latest.get_batt(),
                 'ischarging': latest.get_ischarging()
             }
