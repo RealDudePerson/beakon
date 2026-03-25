@@ -641,7 +641,7 @@ def speed():
     return render_template('speed.html')
 
 if __name__ == '__main__':
-    @app.before_first_request
-    def create_table():
+    with app.app_context():
+        from src.models import UserModel, LocationsModel, UserDataModel, SharingPermissionModel
         db.create_all()
     app.run(ssl_context="adhoc",host='0.0.0.0')
