@@ -44,6 +44,10 @@ class LocationsModel(db.Model):
     batt = db.Column(db.Integer)
     ischarging = db.Column(db.Boolean)
 
+    __table_args__ = (
+        db.Index('idx_userid_timestamp', 'userid', 'timestamp'),
+    )
+
     def set_lat(self, lat):
         self.lat = lat
     def get_lat(self):
