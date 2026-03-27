@@ -32,7 +32,7 @@ python -c "import sys; sys.path.insert(0, 'src'); from app import app; app.run()
 
 Open https://localhost:5000 in your browser.
 
-The first user you register will be the admin. To disable registration after creating your account, edit `config.cfg` and set `REGISTRATION_ENABLED = False`.
+To disable registration after creating your account, edit `config.cfg` and set `REGISTRATION_ENABLED = False`.
 
 ### Threat Model
 This is completely built in my little spare time as a project to learn flask. This is my first flask project. This should not be used public facing, and if it is used public facing, disable registration once you have setup accounts.
