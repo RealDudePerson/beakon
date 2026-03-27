@@ -85,7 +85,7 @@ def get_locations_for_date(userid, date_str):
     ).order_by(LocationsModel.timestamp.asc()).all()
 
 def get_filtered_locations(userid, max_locations=10, min_distance_meters=91):
-    locations = LocationsModel.query.filter_by(userid=userid).order_by(LocationsModel.id.desc()).all()
+    locations = LocationsModel.query.filter_by(userid=userid).order_by(LocationsModel.timestamp.desc()).yield_per(100)
     filtered = []
     for loc in locations:
         if len(filtered) >= max_locations:
