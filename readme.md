@@ -51,17 +51,18 @@ pyOpenSSL
 
 
 ### HTML/CSS/JS
-[foundation]
 
-[leaflet]
+[leaflet](https://github.com/Leaflet/Leaflet)
 
-[flatpickr]
+[foundation](https://github.com/foundation/foundation-sites)
+
+[flatpickr](https://github.com/flatpickr/flatpickr)
 
 ### Hosted Dependencies
 [mapbox]
 
 ### Useful Third Party Tools
-[GPSLogger] is an open source android app that can automatically send requests to update your location in Beakon.
+[GPSLogger](https://gpslogger.app) is an open source android app that can automatically send requests to update your location in Beakon.
 
 In GPSLogger you can use the 'Log to custom URL' feature to update your location in the background. The URL endpoing is /api/recordlocation.
 
@@ -100,7 +101,3 @@ The map automatically refreshes to check for new locations, but only recenters o
 
 ### Speedometer
 A speedometer view is available at `/speed` for visualizing travel speed based on location history.
-[leaflet]: https://github.com/Leaflet/Leaflet
-[foundation]: https://github.com/foundation/foundation-sites
-[gpslogger]: https://gpslogger.app
-[flatpickr]: https://github.com/flatpickr/flatpickr
