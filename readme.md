@@ -100,4 +100,4 @@ The map displays a color-coded path connecting your locations:
 The map automatically refreshes to check for new locations, but only recenters on new data. If you pan or zoom the map, your view is preserved when no new location data has arrived.
 
 ### Speedometer
-A speedometer view is available at `/speed` for visualizing travel speed based on location history.
+A speedometer view is available at `/speed` for visualizing current travel speed.
