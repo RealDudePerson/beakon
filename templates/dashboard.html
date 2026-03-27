@@ -158,7 +158,7 @@
                 markersLayer.addLayer(marker);
             });
             if (filtered.length > 0 && !selectedDate && isNewData) {
-                map.panTo([filtered[filtered.length - 1].lat, filtered[filtered.length - 1].lon], {animate: true, duration: 1});
+                map.panTo([filtered[0].lat, filtered[0].lon], {animate: true, duration: 1});
             }
         }
 
