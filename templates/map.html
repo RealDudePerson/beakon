@@ -119,7 +119,7 @@
             });
         }
 
-        function updateMap(locations) {
+        function updateMap(locations, isNewData) {
             markersLayer.clearLayers();
             locationsLayer.clearLayers();
             var filtered = clusterLocations(locations);
@@ -143,7 +143,7 @@
                 marker.bindPopup('<b>' + (isNewest ? 'Current Location' : 'Location ' + (filtered.length - idx)) + '</b><br>' + loc.timestamp);
                 markersLayer.addLayer(marker);
             });
-            if (filtered.length > 0 && !selectedDate) {
+            if (filtered.length > 0 && !selectedDate && isNewData) {
                 map.panTo([filtered[filtered.length - 1].lat, filtered[filtered.length - 1].lon], {animate: true, duration: 1});
             }
         }
@@ -161,12 +161,13 @@
         }
 
         var initialLocations = {{ locations|tojson }};
-        updateMap(initialLocations);
+        updateMap(initialLocations, true);
 
         var refreshInterval = null;
         var REFRESH_INTERVAL_MS = 10000;
         var MAP_USERNAME = '{{ map_username }}';
         var selectedDate = null;
+        var lastKnownTimestamp = null;
 
         function fetchLocations() {
             var url = '/api/locations/' + MAP_USERNAME;
@@ -177,8 +178,12 @@
                 .then(function(response) { return response.json(); })
                 .then(function(data) {
                     if (data.locations && data.locations.length > 0) {
-                        updateMap(data.locations);
-                        updateStats(data.latest);
+                        var isNewData = lastKnownTimestamp === null || data.latest.timestamp !== lastKnownTimestamp;
+                        updateMap(data.locations, isNewData);
+                        if (isNewData) {
+                            updateStats(data.latest);
+                        }
+                        lastKnownTimestamp = data.latest.timestamp;
                     }
                 })
                 .catch(function(err) { console.error('Fetch error:', err); });
