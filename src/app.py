@@ -167,6 +167,10 @@ with open(config_path, 'r') as f:
             key = key.strip()
             value = value.strip().strip("'\"")
             if key and value:
+                if value.lower() in ('true', '1', 'yes', 'on'):
+                    value = True
+                elif value.lower() in ('false', '0', 'no', 'off'):
+                    value = False
                 app.config[key] = value
 
 @app.context_processor
