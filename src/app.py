@@ -7,6 +7,7 @@ from logging.handlers import RotatingFileHandler
 from flask import Flask, render_template, request, redirect, session, Response
 from models import UserModel,db,login,UserDataModel,LocationsModel,SharingPermissionModel
 from flask_login import login_required, current_user, login_user, logout_user
+from flask_talisman import Talisman
 from datetime import datetime, timedelta
 
 def seed_test_data():
@@ -181,6 +182,25 @@ def inject_version():
 db.init_app(app)
 login.init_app(app)
 login.login_view = 'login'
+
+# Cookie security settings
+app.config['SESSION_COOKIE_SECURE'] = True
+app.config['SESSION_COOKIE_HTTPONLY'] = False
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['REMEMBER_COOKIE_SECURE'] = True
+app.config['REMEMBER_COOKIE_HTTPONLY'] = True
+app.config['REMEMBER_COOKIE_SAMESITE'] = 'Lax'
+
+# Initialize Talisman with security headers
+talisman = Talisman(app,
+    content_security_policy={
+        'default-src': "'self'",
+        'script-src': "'self'",
+        'style-src': "'self'",
+        'img-src': "'self' data: https://*.tiles.mapbox.com https://api.mapbox.com",
+        'connect-src': "'self' https://api.mapbox.com",
+    }
+)
 
 # App routes
 @app.route('/')
