@@ -196,7 +196,7 @@ talisman = Talisman(app,
     content_security_policy={
         'default-src': "'self'",
         'script-src': "'self' 'unsafe-eval'",
-        'style-src': "'self'",
+        'style-src': "'self' 'unsafe-inline'",
         'img-src': "'self' data: https://*.tiles.mapbox.com https://api.mapbox.com",
         'connect-src': "'self' https://api.mapbox.com",
     }
