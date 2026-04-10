@@ -202,7 +202,8 @@ talisman = Talisman(app,
     },
     x_xss_protection='1; mode=block',
     cross_origin_opener_policy='same-origin',
-    cross_origin_resource_policy='require-corp'
+    cross_origin_resource_policy='same-origin',
+    cross_origin_embedder_policy='require-corp'
 )
 
 # App routes
