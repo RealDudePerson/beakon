@@ -200,11 +200,15 @@ talisman = Talisman(app,
         'img-src': "'self' data: https://*.tiles.mapbox.com https://api.mapbox.com",
         'connect-src': "'self' https://api.mapbox.com",
     },
-    x_xss_protection='1; mode=block',
-    cross_origin_opener_policy='same-origin',
-    cross_origin_resource_policy='same-origin',
-    cross_origin_embedder_policy='require-corp'
+    x_xss_protection='1; mode=block'
 )
+
+@app.after_request
+def add_cross_origin_headers(response):
+    response.headers['Cross-Origin-Opener-Policy'] = 'same-origin'
+    response.headers['Cross-Origin-Resource-Policy'] = 'same-origin'
+    response.headers['Cross-Origin-Embedder-Policy'] = 'require-corp'
+    return response
 
 # App routes
 @app.route('/')
