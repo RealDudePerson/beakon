@@ -199,7 +199,8 @@ talisman = Talisman(app,
         'style-src': "'self' 'unsafe-inline'",
         'img-src': "'self' data: https://*.tiles.mapbox.com https://api.mapbox.com",
         'connect-src': "'self' https://api.mapbox.com",
-    }
+    },
+    x_xss_protection='1; mode=block'
 )
 
 # App routes
