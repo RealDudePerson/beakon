@@ -8,7 +8,9 @@ from flask import Flask, render_template, request, redirect, session, Response
 from models import UserModel,db,login,UserDataModel,LocationsModel,SharingPermissionModel
 from flask_login import login_required, current_user, login_user, logout_user
 from flask_talisman import Talisman
+from flask_apscheduler import APScheduler
 from datetime import datetime, timedelta
+from geofencing import check_geofences
 
 def seed_test_data():
     if UserModel.query.filter_by(username='alice').first():
@@ -182,6 +184,12 @@ def inject_version():
 db.init_app(app)
 login.init_app(app)
 login.login_view = 'login'
+
+# Initialize Scheduler
+scheduler = APScheduler()
+scheduler.init_app(app)
+scheduler.start()
+scheduler.add_job(id='geofencing_task', func=check_geofences, trigger='interval', minutes=5)
 
 # Cookie security settings
 app.config['SESSION_COOKIE_SECURE'] = True
@@ -497,6 +505,27 @@ def api_get_user_locations(map_username):
             }
         }
     return {'locations': [], 'latest': None}
+
+# Known Places API
+@app.route('/api/places', methods=['GET', 'POST', 'DELETE'])
+@login_required
+def api_places():
+    id = current_user.get_id()
+    if request.method == 'GET':
+        places = KnownPlaceModel.query.filter_by(userid=id).all()
+        return {'places': [{'id': p.id, 'name': p.name, 'lat': p.lat, 'lon': p.lon, 'radius': p.radius, 'webhook_url': p.webhook_url, 'enabled': p.enabled} for p in places]}
+    elif request.method == 'POST':
+        data = request.get_json()
+        place = KnownPlaceModel(userid=id, name=data['name'], lat=data['lat'], lon=data['lon'], radius=data.get('radius', 100), webhook_url=data['webhook_url'], enabled=data.get('enabled', True))
+        db.session.add(place)
+        db.session.commit()
+        return Response(status=201)
+    elif request.method == 'DELETE':
+        data = request.get_json()
+        KnownPlaceModel.query.filter_by(id=data['id'], userid=id).delete()
+        db.session.commit()
+        return Response(status=200)
+    return Response(status=405)
 
 # This is where account information can be set and updated
 # including adding and removing location permissions
