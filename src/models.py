@@ -138,3 +138,15 @@ class SharingPermissionModel(db.Model):
 
     def get_shared_with_id(self):
         return self.shared_with_id
+
+class KnownPlaceModel(db.Model):
+    __tablename__ = 'known_places'
+    id = db.Column(db.Integer, primary_key=True)
+    userid = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
+    name = db.Column(db.String(100))
+    lat = db.Column(db.Float())
+    lon = db.Column(db.Float())
+    radius = db.Column(db.Integer, default=100)
+    webhook_url = db.Column(db.String(255))
+    enabled = db.Column(db.Boolean, default=True)
+    is_inside = db.Column(db.Boolean, default=False)
