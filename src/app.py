@@ -548,7 +548,7 @@ def account():
     lname = UserDataModel.query.filter_by(id=id).first()
     if lname is not None:
         lname = lname.get_lname()
-    return render_template('account.html',username=username,sharing_permission_list=sharing_permission_list,sharing_permission_count=sharing_permission_count,fname=fname,lname=lname,id=id)
+    return render_template('account.html',username=username,sharing_permission_list=sharing_permission_list,sharing_permission_count=sharing_permission_count,fname=fname,lname=lname,id=id, mapboxapi=app.config['MAPBOX_API_KEY'])
 
 # This is the logic for updating fname, lname
 # as well as setting location sharing permissions.
