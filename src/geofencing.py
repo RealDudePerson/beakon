@@ -13,7 +13,9 @@ def haversine_meters(lat1, lon1, lat2, lon2):
     return R * c
 
 def check_geofences(app):
-    with app.app_context():
+    ctx = app.app_context()
+    ctx.push()
+    try:
         places = KnownPlaceModel.query.filter_by(enabled=True).all()
         for place in places:
             user = UserModel.query.get(place.userid)
@@ -51,3 +53,5 @@ def check_geofences(app):
                 except Exception as e:
                     import logging
                     logging.error(f"Webhook failed for place {place.name}: {e}")
+    finally:
+        ctx.pop()
