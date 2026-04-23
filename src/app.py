@@ -12,6 +12,55 @@ from flask_apscheduler import APScheduler
 from datetime import datetime, timedelta
 from geofencing import check_geofences
 
+# Define app
+app = Flask(__name__, template_folder='../templates', static_folder='../static', instance_path=os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'instance'))
+
+# Ensure instance directory and config exist before loading config
+def ensure_paths(app):
+    instance_path = app.instance_path
+    os.makedirs(instance_path, exist_ok=True)
+    logs_path = os.path.join(instance_path, 'logs')
+    os.makedirs(logs_path, exist_ok=True)
+    project_root = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    config_path = os.path.join(project_root, 'config.cfg')
+    if not os.path.exists(config_path):
+        with open(config_path, 'w') as f:
+            f.write("# Auto-generated config\nSECRET_KEY = 'changeme'\nMAPBOX_API_KEY = ''\n")
+    return instance_path, logs_path, config_path
+
+ensure_paths(app)
+
+# Set up logging to instance/logs/
+app.logger_name = "WEBSRVR"
+logs_path = os.path.join(app.instance_path, 'logs')
+file_handler = RotatingFileHandler(os.path.join(logs_path, 'beakon.log'), 'a', 1 * 1024 * 1024, 10)
+file_handler.setLevel(logging.DEBUG)
+file_handler.setFormatter(logging.Formatter('%(asctime)s [%(process)-5d:%(thread)#x] %(name)s %(levelname)-5s %(message)s [in %(module)s @ %(pathname)s:%(lineno)d]'))
+app.logger.addHandler(file_handler)
+app.logger.setLevel(logging.DEBUG)
+
+# Load config
+project_root = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+config_path = os.path.join(project_root, 'config.cfg')
+with open(config_path, 'r') as f:
+    for line in f:
+        line = line.strip()
+        if line and not line.startswith('#') and '=' in line:
+            key, value = line.split('=', 1)
+            key = key.strip()
+            value = value.strip().strip("'\"")
+            if key and value:
+                if value.lower() in ('true', '1', 'yes', 'on'):
+                    value = True
+                elif value.lower() in ('false', '0', 'no', 'off'):
+                    value = False
+                app.config[key] = value
+
+# Initiate the database and login
+db.init_app(app)
+login.init_app(app)
+login.login_view = 'login'
+
 # Initialize Scheduler
 scheduler = APScheduler()
 scheduler.init_app(app)
