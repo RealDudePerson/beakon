@@ -10,7 +10,7 @@ from flask_login import login_required, current_user, login_user, logout_user
 from flask_talisman import Talisman
 from flask_apscheduler import APScheduler
 from datetime import datetime, timedelta
-from geofencing import check_geofences
+from geofencing import check_geofences, haversine_meters
 
 # Define app
 app = Flask(__name__, template_folder='../templates', static_folder='../static', instance_path=os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'instance'))
@@ -93,6 +93,45 @@ def add_cross_origin_headers(response):
     response.headers['Cross-Origin-Resource-Policy'] = 'same-origin'
     response.headers['Cross-Origin-Embedder-Policy'] = 'credentialless'
     return response
+
+def format_timestamp(ts, time_only=False):
+    if time_only:
+        return ts.strftime('%H:%M:%S')
+    diff = datetime.now() - ts
+    if diff.days < 1:
+        hours_ago = diff.seconds // 3600
+        if hours_ago >= 1:
+            return f"{hours_ago} hour{'s' if hours_ago != 1 else ''} ago"
+        minutes_ago = diff.seconds // 60
+        if minutes_ago >= 1:
+            return f"{minutes_ago} minute{'s' if minutes_ago != 1 else ''} ago"
+        return "just now"
+    return str(ts)
+
+def get_filtered_locations(userid, max_locations=10, min_distance_meters=91):
+    all_locations = LocationsModel.query.filter_by(userid=userid).order_by(LocationsModel.timestamp.desc()).yield_per(100)
+    filtered = []
+    last_loc = None
+    for loc in all_locations:
+        if last_loc:
+            dist = haversine_meters(last_loc.get_lat(), last_loc.get_lon(), loc.get_lat(), loc.get_lon())
+            if dist < min_distance_meters:
+                continue
+        filtered.append(loc)
+        last_loc = loc
+        if len(filtered) >= max_locations:
+            break
+    return filtered
+
+def get_locations_for_date(userid, date_str):
+    date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
+    start_of_day = datetime.combine(date_obj, datetime.min.time())
+    end_of_day = datetime.combine(date_obj, datetime.max.time())
+    return LocationsModel.query.filter(
+        LocationsModel.userid == userid,
+        LocationsModel.timestamp >= start_of_day,
+        LocationsModel.timestamp <= end_of_day
+    ).order_by(LocationsModel.timestamp.asc()).all()
 
 # App routes
 @app.route('/')
