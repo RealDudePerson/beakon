@@ -219,10 +219,11 @@
 {% block script %}
 <script src="{{ url_for('static', filename = 'js/account.js') }}"></script>
 <script>
+    var mapboxToken = '{{mapboxapi}}';
     var placeMap = L.map('place-map').setView([0,0], 2);
-    L.tileLayer('https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={{mapboxapi}}', {
+    L.tileLayer('https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token=' + mapboxToken, {
         id: 'mapbox/streets-v11',
-        accessToken: '{{mapboxapi}}'
+        accessToken: mapboxToken
     }).addTo(placeMap);
     var marker;
     placeMap.on('click', function(e) {
@@ -243,7 +244,9 @@
                 webhook_url: document.getElementById('place-webhook').value,
                 enabled: document.getElementById('place-enabled').checked
             })
-        }).then(() => location.reload());
+        }).then(() => {
+            location.reload();
+        });
     });
 </script>
 {% endblock %}

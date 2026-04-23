@@ -154,3 +154,67 @@ deleteLocationButton.addEventListener('click', function(){
         deleteLocationError.classList.remove('hide');
     }
 });
+
+// Known Places logic
+function loadPlaces() {
+    fetch('/api/places')
+        .then(res => res.json())
+        .then(data => {
+            var tbody = document.querySelector('#places-table tbody');
+            tbody.innerHTML = '';
+            data.places.forEach(place => {
+                var row = `<tr>
+                    <td>${place.name}</td>
+                    <td>${place.radius}</td>
+                    <td>${place.webhook_url}</td>
+                    <td>${place.enabled ? 'Yes' : 'No'}</td>
+                    <td><button class="button alert" onclick="deletePlace(${place.id})">Delete</button></td>
+                </tr>`;
+                tbody.innerHTML += row;
+            });
+        });
+}
+
+function deletePlace(id) {
+    fetch('/api/places', {
+        method: 'DELETE',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({id: id})
+    }).then(() => loadPlaces());
+}
+
+document.addEventListener('DOMContentLoaded', loadPlaces);
+
+// Setup Map Picker
+// Note: Requires mapboxapi token available in the global JS scope,
+// which should be passed from account.html
+var placeMap = L.map('place-map').setView([0,0], 2);
+L.tileLayer('https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token=' + mapboxToken, {
+    id: 'mapbox/streets-v11',
+    accessToken: mapboxToken
+}).addTo(placeMap);
+
+var marker;
+placeMap.on('click', function(e) {
+    if (marker) placeMap.removeLayer(marker);
+    marker = L.marker(e.latlng).addTo(placeMap);
+});
+
+document.getElementById('save-place-btn').addEventListener('click', function() {
+    if (!marker) return;
+    fetch('/api/places', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            name: document.getElementById('place-name').value,
+            lat: marker.getLatLng().lat,
+            lon: marker.getLatLng().lng,
+            radius: parseInt(document.getElementById('place-radius').value),
+            webhook_url: document.getElementById('place-webhook').value,
+            enabled: document.getElementById('place-enabled').checked
+        })
+    }).then(() => {
+        loadPlaces();
+        $('#place-modal').foundation('close');
+    });
+});
