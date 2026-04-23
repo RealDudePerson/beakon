@@ -5,7 +5,7 @@ import math
 import random
 from logging.handlers import RotatingFileHandler
 from flask import Flask, render_template, request, redirect, session, Response
-from models import UserModel,db,login,UserDataModel,LocationsModel,SharingPermissionModel
+from models import UserModel,db,login,UserDataModel,LocationsModel,SharingPermissionModel,KnownPlaceModel
 from flask_login import login_required, current_user, login_user, logout_user
 from flask_talisman import Talisman
 from flask_apscheduler import APScheduler
