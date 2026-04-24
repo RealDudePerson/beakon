@@ -175,6 +175,7 @@
             <thead>
                 <tr>
                     <th>Name</th>
+                    <th>Coordinates</th>
                     <th>Radius (m)</th>
                     <th>Webhook</th>
                     <th>Enabled</th>
@@ -183,17 +184,29 @@
             </thead>
             <tbody></tbody>
         </table>
-        <button class="button" data-open="place-modal">Add Place</button>
+        <button class="button" id="add-place-btn">Add Place</button>
     </div>
 </div>
 
-<div class="reveal" id="place-modal" data-reveal>
-    <h5>Add Known Place</h5>
-    <input type="text" id="place-name" placeholder="Name">
-    <input type="number" id="place-radius" placeholder="Radius (m)">
-    <input type="text" id="place-webhook" placeholder="Webhook URL">
-    <label><input type="checkbox" id="place-enabled" checked> Enabled</label>
-    <div id="place-map" style="height: 300px;"></div>
+<div class="reveal large" id="place-modal" data-reveal>
+    <h5 id="place-modal-title">Add Known Place</h5>
+    <div class="grid-x grid-margin-x">
+        <div class="cell medium-6">
+            <label>Name
+                <input type="text" id="place-name" placeholder="Name">
+            </label>
+            <label>Radius (meters)
+                <input type="number" id="place-radius" placeholder="Radius (m)" value="100">
+            </label>
+            <label>Webhook URL
+                <input type="text" id="place-webhook" placeholder="Webhook URL">
+            </label>
+            <label><input type="checkbox" id="place-enabled" checked> Enabled</label>
+        </div>
+        <div class="cell medium-6">
+            <div id="place-map" style="height: 300px;"></div>
+        </div>
+    </div>
     <button class="button" id="save-place-btn">Save</button>
     <button class="close-button" data-close aria-label="Close modal" type="button">
         <span aria-hidden="true">&times;</span>
@@ -222,40 +235,81 @@
     var mapboxToken = '{{mapboxapi}}';
     var placeMap;
     var marker;
+    var mapInitialized = false;
 
-    $(document).on('open.zf.reveal', '#place-modal', function () {
-        if (!placeMap) {
+    function initPlaceMap() {
+        if (!mapInitialized) {
             placeMap = L.map('place-map').setView([0,0], 2);
             L.tileLayer('https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token=' + mapboxToken, {
                 id: 'mapbox/streets-v11',
                 accessToken: mapboxToken
             }).addTo(placeMap);
-            
+
             placeMap.on('click', function(e) {
+                if (modalMode === 'view') return;
                 if (marker) placeMap.removeLayer(marker);
                 marker = L.marker(e.latlng).addTo(placeMap);
             });
-            
+
             document.getElementById('save-place-btn').addEventListener('click', function() {
                 if (!marker) return;
-                fetch('/api/places', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        name: document.getElementById('place-name').value,
-                        lat: marker.getLatLng().lat,
-                        lon: marker.getLatLng().lng,
-                        radius: parseInt(document.getElementById('place-radius').value),
-                        webhook_url: document.getElementById('place-webhook').value,
-                        enabled: document.getElementById('place-enabled').checked
-                    })
-                }).then(() => {
-                    location.reload();
-                });
+                var payload = {
+                    name: document.getElementById('place-name').value,
+                    lat: marker.getLatLng().lat,
+                    lon: marker.getLatLng().lng,
+                    radius: parseInt(document.getElementById('place-radius').value) || 100,
+                    webhook_url: document.getElementById('place-webhook').value,
+                    enabled: document.getElementById('place-enabled').checked
+                };
+
+                if (modalMode === 'edit' && editingPlaceId) {
+                    payload.id = editingPlaceId;
+                    fetch('/api/places', {
+                        method: 'PUT',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(payload)
+                    }).then(function() {
+                        $('#place-modal').foundation('close');
+                        loadPlaces();
+                    });
+                } else {
+                    fetch('/api/places', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(payload)
+                    }).then(function() {
+                        $('#place-modal').foundation('close');
+                        loadPlaces();
+                    });
+                }
             });
-        } else {
-            setTimeout(function() { placeMap.invalidateSize(); }, 200);
+
+            mapInitialized = true;
         }
+    }
+
+    $(document).on('open.zf.reveal', '#place-modal', function() {
+        initPlaceMap();
+        setTimeout(function() {
+            placeMap.invalidateSize();
+            if (marker) {
+                placeMap.removeLayer(marker);
+                marker = null;
+            }
+            if (window._pendingPlaceView) {
+                var coords = window._pendingPlaceView;
+                placeMap.setView([coords.lat, coords.lon], 15);
+                marker = L.marker([coords.lat, coords.lon]).addTo(placeMap);
+                window._pendingPlaceView = null;
+            } else {
+                placeMap.setView([0, 0], 2);
+            }
+        }, 200);
+    });
+
+    $(document).on('closed.zf.reveal', '#place-modal', function() {
+        editingPlaceId = null;
+        modalMode = 'add';
     });
 </script>
 {% endblock %}

@@ -422,7 +422,7 @@ def api_get_user_locations(map_username):
     return {'locations': [], 'latest': None}
 
 # Known Places API
-@app.route('/api/places', methods=['GET', 'POST', 'DELETE'])
+@app.route('/api/places', methods=['GET', 'POST', 'PUT', 'DELETE'])
 @login_required
 def api_places():
     id = current_user.get_id()
@@ -435,6 +435,19 @@ def api_places():
         db.session.add(place)
         db.session.commit()
         return Response(status=201)
+    elif request.method == 'PUT':
+        data = request.get_json()
+        place = KnownPlaceModel.query.filter_by(id=data['id'], userid=id).first()
+        if not place:
+            return Response(status=404)
+        if 'name' in data: place.name = data['name']
+        if 'lat' in data: place.lat = data['lat']
+        if 'lon' in data: place.lon = data['lon']
+        if 'radius' in data: place.radius = data['radius']
+        if 'webhook_url' in data: place.webhook_url = data['webhook_url']
+        if 'enabled' in data: place.enabled = data['enabled']
+        db.session.commit()
+        return Response(status=200)
     elif request.method == 'DELETE':
         data = request.get_json()
         KnownPlaceModel.query.filter_by(id=data['id'], userid=id).delete()
