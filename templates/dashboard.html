@@ -52,6 +52,14 @@
           {% endif %}
       </ul>
       </div>
+      <div class="callout">
+        <label class="toggle-switch">
+          <input type="checkbox" id="tracking-toggle">
+          <span class="toggle-slider"></span>
+        </label>
+        <span id="tracking-status" class="tracking-status off">Tracking Off</span>
+        <div id="tracking-error" class="callout alert hide" style="margin-top: 10px;"></div>
+      </div>
       {% endif %}
       <br>
       {% if sharing_permission_count >= 1 %}
@@ -234,6 +242,90 @@
         });
 
         startRefresh();
+
+        // Tracking state
+        var trackingWatchId = null;
+
+        // Restore tracking state from sessionStorage
+        if (sessionStorage.getItem('trackingEnabled') === 'true') {
+            document.getElementById('tracking-toggle').checked = true;
+            startTracking();
+            document.getElementById('tracking-status').textContent = 'Tracking On';
+            document.getElementById('tracking-status').classList.remove('off');
+            document.getElementById('tracking-status').classList.add('on');
+        }
+
+        function startTracking() {
+            if (trackingWatchId !== null) return;
+            trackingWatchId = navigator.geolocation.watchPosition(
+                function(position) {
+                    var data = {
+                        lat: position.coords.latitude,
+                        lon: position.coords.longitude,
+                        acc: position.coords.accuracy
+                    };
+                    // Poll battery on every tick
+                    if (navigator.getBattery) {
+                        navigator.getBattery().then(function(battery) {
+                            data.batt = Math.round(battery.level * 100);
+                            data.ischarging = battery.charging;
+                            doTrackingPost(data);
+                        }).catch(function() {
+                            doTrackingPost(data);
+                        });
+                    } else {
+                        doTrackingPost(data);
+                    }
+                },
+                function(error) {
+                    var errEl = document.getElementById('tracking-error');
+                    errEl.textContent = 'Location error: ' + error.message;
+                    errEl.classList.remove('hide');
+                    stopTracking();
+                    document.getElementById('tracking-toggle').checked = false;
+                    document.getElementById('tracking-status').textContent = 'Tracking Off';
+                    document.getElementById('tracking-status').classList.remove('on');
+                    document.getElementById('tracking-status').classList.add('off');
+                },
+                { enableHighAccuracy: true }
+            );
+        }
+
+        function doTrackingPost(data) {
+            fetch('/recordlocation', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+        }
+
+        function stopTracking() {
+            if (trackingWatchId !== null) {
+                navigator.geolocation.clearWatch(trackingWatchId);
+                trackingWatchId = null;
+            }
+        }
+
+        document.getElementById('tracking-toggle').addEventListener('change', function() {
+            if (this.checked) {
+                startTracking();
+                document.getElementById('tracking-status').textContent = 'Tracking On';
+                document.getElementById('tracking-status').classList.remove('off');
+                document.getElementById('tracking-status').classList.add('on');
+                sessionStorage.setItem('trackingEnabled', 'true');
+            } else {
+                stopTracking();
+                document.getElementById('tracking-status').textContent = 'Tracking Off';
+                document.getElementById('tracking-status').classList.remove('on');
+                document.getElementById('tracking-status').classList.add('off');
+                sessionStorage.setItem('trackingEnabled', 'false');
+            }
+        });
+
+        // Stop tracking on page unload
+        window.addEventListener('beforeunload', function() {
+            stopTracking();
+        });
     </script>
 {% endif %}
 {% endblock %}
