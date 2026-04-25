@@ -170,12 +170,12 @@ function loadPlaces() {
                 var enabledBtnClass = place.enabled ? 'success' : 'secondary';
                 var enabledBtnText = place.enabled ? 'On' : 'Off';
                 var row = '<tr>' +
-                    '<td>' + place.name + '</td>' +
-                    '<td>' + place.lat.toFixed(5) + ', ' + place.lon.toFixed(5) + '</td>' +
-                    '<td>' + place.radius + '</td>' +
-                    '<td title="' + place.webhook_url + '">' + truncWebhook + '</td>' +
-                    '<td><button class="button small ' + enabledBtnClass + '" onclick="togglePlace(' + place.id + ', ' + place.enabled + ')">' + enabledBtnText + '</button></td>' +
-                    '<td>' +
+                    '<td data-label="Name">' + place.name + '</td>' +
+                    '<td data-label="Coordinates" class="show-for-medium">' + place.lat.toFixed(5) + ', ' + place.lon.toFixed(5) + '</td>' +
+                    '<td data-label="Radius">' + place.radius + '</td>' +
+                    '<td data-label="Webhook" class="show-for-medium" title="' + place.webhook_url + '">' + truncWebhook + '</td>' +
+                    '<td data-label="Enabled"><button class="button small ' + enabledBtnClass + '" onclick="togglePlace(' + place.id + ', ' + place.enabled + ')">' + enabledBtnText + '</button></td>' +
+                    '<td data-label="Actions">' +
                         '<button class="button small" onclick="viewPlace(' + place.id + ', ' + place.lat + ', ' + place.lon + ', \'' + place.name.replace(/'/g, "\\'") + '\')">View</button> ' +
                         '<button class="button small warning" onclick="editPlace(' + place.id + ', \'' + place.name.replace(/'/g, "\\'") + '\', ' + place.lat + ', ' + place.lon + ', ' + place.radius + ', \'' + place.webhook_url.replace(/'/g, "\\'") + '\', ' + place.enabled + ')">Edit</button> ' +
                         '<button class="button small alert" onclick="deletePlace(' + place.id + ')">Delete</button>' +
