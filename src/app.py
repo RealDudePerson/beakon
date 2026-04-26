@@ -349,6 +349,14 @@ def record_location():
         location.set_acc(acc)
         location.set_timestamp(datetime.now())
         location.set_userid(current_user.get_id())
+        
+        batt = request_data.get('batt')
+        if batt is not None:
+            location.set_batt(batt)
+        
+        ischarging = request_data.get('ischarging', False)
+        location.set_ischarging(ischarging)
+        
         db.session.add(location)
         db.session.commit()
         return render_template('recordlocation.html')
