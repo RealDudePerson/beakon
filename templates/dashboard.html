@@ -47,9 +47,7 @@
           <li>Lat: <span id="stat-lat">{{ lat }}</span></li>
           <li>Lon: <span id="stat-lon">{{ lon }}</span></li>
           <li><a id="stat-gmap" href="https://maps.google.com/?q={{lat}},{{lon}}">Google Map Location</a></li>
-          {% if batt != Null %}
-          <li>Battery: <span id="stat-batt">{{ batt }}</span>{% if ischarging == true %}⚡{% endif %}%
-          {% endif %}
+          <li id="stat-batt-li" {% if batt == None %}class="hide"{% endif %}>Battery: <span id="stat-batt">{{ batt }}</span><span id="stat-charging">{% if ischarging == true %}⚡{% endif %}</span>%</li>
       </ul>
       </div>
       {% endif %}
@@ -176,9 +174,17 @@
             document.getElementById('stat-lat').textContent = latest.lat;
             document.getElementById('stat-lon').textContent = latest.lon;
             document.getElementById('stat-gmap').href = 'https://maps.google.com/?q=' + latest.lat + ',' + latest.lon;
+            
+            var battLi = document.getElementById('stat-batt-li');
             var battSpan = document.getElementById('stat-batt');
-            if (battSpan) {
-                battSpan.textContent = latest.batt;
+            var chargingSpan = document.getElementById('stat-charging');
+            
+            if (latest.batt !== null && latest.batt !== undefined) {
+                if (battSpan) battSpan.textContent = latest.batt;
+                if (chargingSpan) chargingSpan.textContent = latest.ischarging ? '⚡' : '';
+                if (battLi) battLi.classList.remove('hide');
+            } else if (battLi) {
+                battLi.classList.add('hide');
             }
         }
 
