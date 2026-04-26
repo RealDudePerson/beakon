@@ -52,6 +52,7 @@
           {% endif %}
       </ul>
       </div>
+      {% endif %}
       <div class="callout">
         <label class="toggle-switch">
           <input type="checkbox" id="tracking-toggle">
@@ -60,7 +61,6 @@
         <span id="tracking-status" class="tracking-status off">Tracking Off</span>
         <div id="tracking-error" class="callout alert hide" style="margin-top: 10px;"></div>
       </div>
-      {% endif %}
       <br>
       {% if sharing_permission_count >= 1 %}
       <div class="callout">
@@ -212,11 +212,7 @@
 
         document.getElementById('date-picker').addEventListener('change', function(e) {
             selectedDate = e.target.value;
-            if (selectedDate) {
-                fetchLocations();
-            } else {
-                fetchLocations();
-            }
+            fetchLocations();
         });
 
         function startRefresh() {
@@ -242,7 +238,9 @@
         });
 
         startRefresh();
-
+    </script>
+{% endif %}
+    <script>
         // Tracking state
         var trackingWatchId = null;
 
@@ -327,5 +325,4 @@
             stopTracking();
         });
     </script>
-{% endif %}
 {% endblock %}
