@@ -249,6 +249,7 @@
     <script>
         // Tracking state
         var trackingWatchId = null;
+        var lastTrackingUpdateTime = 0;
 
         // Restore tracking state from sessionStorage
         if (sessionStorage.getItem('trackingEnabled') === 'true') {
@@ -263,6 +264,12 @@
             if (trackingWatchId !== null) return;
             trackingWatchId = navigator.geolocation.watchPosition(
                 function(position) {
+                    var now = Date.now();
+                    if (now - lastTrackingUpdateTime < 10000) {
+                        return; // Ignore update
+                    }
+                    lastTrackingUpdateTime = now;
+
                     var data = {
                         lat: position.coords.latitude,
                         lon: position.coords.longitude,
