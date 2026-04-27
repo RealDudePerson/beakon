@@ -190,7 +190,8 @@ if prompt_yes_no "Populate test data?"; then
     $PYTHON -c "
 import sys
 sys.path.insert(0, 'src')
-from app import app, seed_test_data
+from seed import seed_test_data
+from app import app
 with app.app_context():
     seed_test_data()
 print('Test data seeded successfully')
