@@ -661,6 +661,6 @@ def speed():
 
 if __name__ == '__main__':
     with app.app_context():
-        from src.models import UserModel, LocationsModel, UserDataModel, SharingPermissionModel
+        from src.models import UserModel, LocationsModel, UserDataModel, SharingPermissionModel, KnownPlaceModel
         db.create_all()
     app.run(ssl_context="adhoc",host='0.0.0.0')
