@@ -5,161 +5,43 @@ import math
 import random
 from logging.handlers import RotatingFileHandler
 from flask import Flask, render_template, request, redirect, session, Response
-from models import UserModel,db,login,UserDataModel,LocationsModel,SharingPermissionModel
+from models import UserModel,db,login,UserDataModel,LocationsModel,SharingPermissionModel,KnownPlaceModel
 from flask_login import login_required, current_user, login_user, logout_user
 from flask_talisman import Talisman
+from flask_apscheduler import APScheduler
 from datetime import datetime, timedelta
+from geofencing import check_geofences, haversine_meters
 
-def seed_test_data():
-    if UserModel.query.filter_by(username='alice').first():
-        return
-    users = [
-        {'username': 'alice', 'fname': 'Alice', 'lname': 'Smith'},
-        {'username': 'bob', 'fname': 'Bob', 'lname': 'Jones'},
-        {'username': 'charlie', 'fname': 'Charlie', 'lname': 'Brown'},
-    ]
-    for u in users:
-        user = UserModel(username=u['username'])
-        user.set_password('test123')
-        db.session.add(user)
-        db.session.commit()
-        
-        user_data = UserDataModel(id=user.get_id(), fname=u['fname'], lname=u['lname'])
-        db.session.add(user_data)
-        db.session.commit()
-    
-    base_lat, base_lon = 37.7749, -122.4194
-    
-    for i, u in enumerate(users):
-        user = UserModel.query.filter_by(username=u['username']).first()
-        for j in range(15):
-            lat = base_lat + (i * 0.01) + (j * 0.001)
-            lon = base_lon + (j * 0.001)
-            location = LocationsModel()
-            location.set_lat(lat)
-            location.set_lon(lon)
-            location.set_acc(random.uniform(5, 50))
-            location.set_timestamp(datetime.now() - timedelta(days=14) + timedelta(hours=j * 2))
-            location.set_userid(user.get_id())
-            location.set_batt(random.randint(20, 100))
-            location.set_ischarging(random.choice([True, False]))
-            db.session.add(location)
-        db.session.commit()
-    
-    alice = UserModel.query.filter_by(username='alice').first()
-    bob = UserModel.query.filter_by(username='bob').first()
-    charlie = UserModel.query.filter_by(username='charlie').first()
-    
-    perm1 = SharingPermissionModel()
-    perm1.set_data_owner_username('alice')
-    perm1.set_data_owner_id(alice.get_id())
-    perm1.set_shared_with_username('bob')
-    perm1.set_shared_with_id(bob.get_id())
-    db.session.add(perm1)
-    
-    perm2 = SharingPermissionModel()
-    perm2.set_data_owner_username('bob')
-    perm2.set_data_owner_id(bob.get_id())
-    perm2.set_shared_with_username('charlie')
-    perm2.set_shared_with_id(charlie.get_id())
-    db.session.add(perm2)
-    db.session.commit()
-
-def haversine_meters(lat1, lon1, lat2, lon2):
-    R = 6371000
-    phi1 = math.radians(lat1)
-    phi2 = math.radians(lat2)
-    delta_phi = math.radians(lat2 - lat1)
-    delta_lambda = math.radians(lon2 - lon1)
-    a = math.sin(delta_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2) ** 2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    return R * c
-
-def get_locations_for_date(userid, date_str):
-    date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
-    start_of_day = datetime.combine(date_obj, datetime.min.time())
-    end_of_day = datetime.combine(date_obj, datetime.max.time())
-    return LocationsModel.query.filter(
-        LocationsModel.userid == userid,
-        LocationsModel.timestamp >= start_of_day,
-        LocationsModel.timestamp <= end_of_day
-    ).order_by(LocationsModel.timestamp.asc()).all()
-
-def get_filtered_locations(userid, max_locations=10, min_distance_meters=91):
-    locations = LocationsModel.query.filter_by(userid=userid).order_by(LocationsModel.timestamp.desc()).yield_per(100)
-    filtered = []
-    for loc in locations:
-        if len(filtered) >= max_locations:
-            break
-        if not filtered:
-            filtered.append(loc)
-        else:
-            prev = filtered[-1]
-            dist = haversine_meters(prev.get_lat(), prev.get_lon(), loc.get_lat(), loc.get_lon())
-            if dist >= min_distance_meters:
-                filtered.append(loc)
-    return filtered
-
-def format_timestamp(ts, time_only=False):
-    if time_only:
-        return ts.strftime('%H:%M:%S')
-    diff = datetime.now() - ts
-    if diff.days < 1:
-        hours_ago = diff.seconds // 3600
-        if hours_ago >= 1:
-            return f"{hours_ago} hour{'s' if hours_ago != 1 else ''} ago"
-        minutes_ago = diff.seconds // 60
-        if minutes_ago >= 1:
-            return f"{minutes_ago} minute{'s' if minutes_ago != 1 else ''} ago"
-        return "just now"
-    return str(ts)
-
-def ensure_paths(app):
-    """Ensure required directories exist per Python standards."""
-    # Use instance folder for config, database, and logs (PEP 668)
-    instance_path = app.instance_path
-    os.makedirs(instance_path, exist_ok=True)
-
-    # Create logs subdirectory
-    logs_path = os.path.join(instance_path, 'logs')
-    os.makedirs(logs_path, exist_ok=True)
-
-    # Check for config file in project root
-    project_root = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-    config_path = os.path.join(project_root, 'config.cfg')
-    if not os.path.exists(config_path):
-        # Create minimal default config
-        with open(config_path, 'w') as f:
-            f.write("# Auto-generated config\nSECRET_KEY = 'changeme'\nMAPBOX_API_KEY = ''\n")
-
-    return instance_path, logs_path, config_path
-
+# Define app
 app = Flask(__name__, template_folder='../templates', static_folder='../static', instance_path=os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'instance'))
 
 # Ensure instance directory and config exist before loading config
+def ensure_paths(app):
+    instance_path = app.instance_path
+    os.makedirs(instance_path, exist_ok=True)
+    logs_path = os.path.join(instance_path, 'logs')
+    os.makedirs(logs_path, exist_ok=True)
+    project_root = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    config_path = os.path.join(project_root, 'config.cfg')
+    if not os.path.exists(config_path):
+        with open(config_path, 'w') as f:
+            f.write("# Auto-generated config\nSECRET_KEY = 'changeme'\nMAPBOX_API_KEY = ''\n")
+    return instance_path, logs_path, config_path
+
 ensure_paths(app)
 
 # Set up logging to instance/logs/
 app.logger_name = "WEBSRVR"
 logs_path = os.path.join(app.instance_path, 'logs')
-os.makedirs(logs_path, exist_ok=True)
 file_handler = RotatingFileHandler(os.path.join(logs_path, 'beakon.log'), 'a', 1 * 1024 * 1024, 10)
 file_handler.setLevel(logging.DEBUG)
 file_handler.setFormatter(logging.Formatter('%(asctime)s [%(process)-5d:%(thread)#x] %(name)s %(levelname)-5s %(message)s [in %(module)s @ %(pathname)s:%(lineno)d]'))
 app.logger.addHandler(file_handler)
 app.logger.setLevel(logging.DEBUG)
 
-# Start log
-app.logger.info('------------ Starting logs')
-app.logger.info('__name__ is \'%s\'' % __name__)
-app.logger.info('Instance path: %s', app.instance_path)
-
-# Load app.config from project root config file
+# Load config
 project_root = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 config_path = os.path.join(project_root, 'config.cfg')
-app.logger.debug('Loading config from \'%s\'', config_path)
-
-# Read config file manually and set values
 with open(config_path, 'r') as f:
     for line in f:
         line = line.strip()
@@ -174,14 +56,16 @@ with open(config_path, 'r') as f:
                     value = False
                 app.config[key] = value
 
-@app.context_processor
-def inject_version():
-    return {'VERSION': app.config.get('VERSION', 'unknown')}
-
 # Initiate the database and login
 db.init_app(app)
 login.init_app(app)
 login.login_view = 'login'
+
+# Initialize Scheduler
+scheduler = APScheduler()
+scheduler.init_app(app)
+scheduler.start()
+scheduler.add_job(id='geofencing_task', func=check_geofences, args=[app], trigger='interval', minutes=5)
 
 # Cookie security settings
 app.config['SESSION_COOKIE_SECURE'] = True
@@ -209,6 +93,45 @@ def add_cross_origin_headers(response):
     response.headers['Cross-Origin-Resource-Policy'] = 'same-origin'
     response.headers['Cross-Origin-Embedder-Policy'] = 'credentialless'
     return response
+
+def format_timestamp(ts, time_only=False):
+    if time_only:
+        return ts.strftime('%H:%M:%S')
+    diff = datetime.now() - ts
+    if diff.days < 1:
+        hours_ago = diff.seconds // 3600
+        if hours_ago >= 1:
+            return f"{hours_ago} hour{'s' if hours_ago != 1 else ''} ago"
+        minutes_ago = diff.seconds // 60
+        if minutes_ago >= 1:
+            return f"{minutes_ago} minute{'s' if minutes_ago != 1 else ''} ago"
+        return "just now"
+    return str(ts)
+
+def get_filtered_locations(userid, max_locations=10, min_distance_meters=91):
+    all_locations = LocationsModel.query.filter_by(userid=userid).order_by(LocationsModel.timestamp.desc()).yield_per(100)
+    filtered = []
+    last_loc = None
+    for loc in all_locations:
+        if last_loc:
+            dist = haversine_meters(last_loc.get_lat(), last_loc.get_lon(), loc.get_lat(), loc.get_lon())
+            if dist < min_distance_meters:
+                continue
+        filtered.append(loc)
+        last_loc = loc
+        if len(filtered) >= max_locations:
+            break
+    return filtered
+
+def get_locations_for_date(userid, date_str):
+    date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
+    start_of_day = datetime.combine(date_obj, datetime.min.time())
+    end_of_day = datetime.combine(date_obj, datetime.max.time())
+    return LocationsModel.query.filter(
+        LocationsModel.userid == userid,
+        LocationsModel.timestamp >= start_of_day,
+        LocationsModel.timestamp <= end_of_day
+    ).order_by(LocationsModel.timestamp.asc()).all()
 
 # App routes
 @app.route('/')
@@ -506,6 +429,62 @@ def api_get_user_locations(map_username):
         }
     return {'locations': [], 'latest': None}
 
+# Known Places API
+@app.route('/api/places', methods=['GET', 'POST', 'PUT', 'DELETE'])
+@login_required
+def api_places():
+    id = current_user.get_id()
+    if request.method == 'GET':
+        places = KnownPlaceModel.query.filter_by(userid=id).all()
+        return {'places': [{'id': p.id, 'name': p.name, 'lat': p.lat, 'lon': p.lon, 'radius': p.radius, 'webhook_url': p.webhook_url, 'enabled': p.enabled} for p in places]}
+    elif request.method == 'POST':
+        data = request.get_json()
+        place = KnownPlaceModel(userid=id, name=data['name'], lat=data['lat'], lon=data['lon'], radius=data.get('radius', 100), webhook_url=data['webhook_url'], enabled=data.get('enabled', True))
+        db.session.add(place)
+        db.session.commit()
+        return Response(status=201)
+    elif request.method == 'PUT':
+        data = request.get_json()
+        place = KnownPlaceModel.query.filter_by(id=data['id'], userid=id).first()
+        if not place:
+            return Response(status=404)
+        if 'name' in data: place.name = data['name']
+        if 'lat' in data: place.lat = data['lat']
+        if 'lon' in data: place.lon = data['lon']
+        if 'radius' in data: place.radius = data['radius']
+        if 'webhook_url' in data: place.webhook_url = data['webhook_url']
+        if 'enabled' in data: place.enabled = data['enabled']
+        db.session.commit()
+        return Response(status=200)
+    elif request.method == 'DELETE':
+        data = request.get_json()
+        KnownPlaceModel.query.filter_by(id=data['id'], userid=id).delete()
+        db.session.commit()
+        return Response(status=200)
+    return Response(status=405)
+
+@app.route('/api/places/<int:place_id>/test', methods=['POST'])
+@login_required
+def api_test_place(place_id):
+    id = current_user.get_id()
+    place = KnownPlaceModel.query.filter_by(id=place_id, userid=id).first()
+    if not place:
+        return Response(status=404)
+    
+    payload = {
+        "event": "test",
+        "place": place.name,
+        "username": current_user.get_username(),
+        "fname": "Test",
+        "lname": "User"
+    }
+    try:
+        response = requests.post(place.webhook_url, json=payload, timeout=5)
+        return {'status': response.status_code}, 200
+    except Exception as e:
+        app.logger.error(f"Test webhook failed for place {place.name}: {e}")
+        return {'error': str(e)}, 500
+
 # This is where account information can be set and updated
 # including adding and removing location permissions
 # setting API Token
@@ -527,7 +506,7 @@ def account():
     lname = UserDataModel.query.filter_by(id=id).first()
     if lname is not None:
         lname = lname.get_lname()
-    return render_template('account.html',username=username,sharing_permission_list=sharing_permission_list,sharing_permission_count=sharing_permission_count,fname=fname,lname=lname,id=id)
+    return render_template('account.html',username=username,sharing_permission_list=sharing_permission_list,sharing_permission_count=sharing_permission_count,fname=fname,lname=lname,id=id, mapboxapi=app.config['MAPBOX_API_KEY'])
 
 # This is the logic for updating fname, lname
 # as well as setting location sharing permissions.
