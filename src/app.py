@@ -463,6 +463,28 @@ def api_places():
         return Response(status=200)
     return Response(status=405)
 
+@app.route('/api/places/<int:place_id>/test', methods=['POST'])
+@login_required
+def api_test_place(place_id):
+    id = current_user.get_id()
+    place = KnownPlaceModel.query.filter_by(id=place_id, userid=id).first()
+    if not place:
+        return Response(status=404)
+    
+    payload = {
+        "event": "test",
+        "place": place.name,
+        "username": current_user.get_username(),
+        "fname": "Test",
+        "lname": "User"
+    }
+    try:
+        response = requests.post(place.webhook_url, json=payload, timeout=5)
+        return {'status': response.status_code}, 200
+    except Exception as e:
+        app.logger.error(f"Test webhook failed for place {place.name}: {e}")
+        return {'error': str(e)}, 500
+
 # This is where account information can be set and updated
 # including adding and removing location permissions
 # setting API Token
