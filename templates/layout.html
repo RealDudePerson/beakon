@@ -45,9 +45,9 @@
             {% block content %}{% endblock %}
         </div>
     </body>
-    {% block script %}{% endblock %}
     <script src="{{ url_for('static', filename = 'js/vendor/jquery.js') }}"></script>
     <script src="{{ url_for('static', filename = 'js/vendor/what-input.js') }}"></script>
     <script src="{{ url_for('static', filename = 'js/vendor/foundation.js') }}"></script>
     <script src="{{ url_for('static', filename = 'js/app.js') }}"></script>
+    {% block script %}{% endblock %}
 </html>
