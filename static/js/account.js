@@ -154,3 +154,155 @@ deleteLocationButton.addEventListener('click', function(){
         deleteLocationError.classList.remove('hide');
     }
 });
+
+// Known Places logic
+var editingPlaceId = null;
+var modalMode = 'add'; // 'add', 'edit', 'view'
+
+function loadPlaces() {
+    fetch('/api/places')
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            var tbody = document.querySelector('#places-table tbody');
+            tbody.innerHTML = '';
+            data.places.forEach(function(place) {
+                var truncWebhook = place.webhook_url.length > 30 ? place.webhook_url.substring(0, 30) + '...' : place.webhook_url;
+                var enabledBtnClass = place.enabled ? 'success' : 'secondary';
+                var enabledBtnText = place.enabled ? 'On' : 'Off';
+                var row = '<tr>' +
+                    '<td data-label="Name">' + place.name + '</td>' +
+                    '<td data-label="Coordinates" class="show-for-medium">' + place.lat.toFixed(5) + ', ' + place.lon.toFixed(5) + '</td>' +
+                    '<td data-label="Radius">' + place.radius + '</td>' +
+                    '<td data-label="Webhook" class="show-for-medium" title="' + place.webhook_url + '">' + truncWebhook + '</td>' +
+                    '<td data-label="Enabled"><button class="button small ' + enabledBtnClass + '" onclick="togglePlace(' + place.id + ', ' + place.enabled + ')">' + enabledBtnText + '</button></td>' +
+                    '<td data-label="Actions">' +
+                        '<button class="button small" onclick="viewPlace(' + place.id + ', ' + place.lat + ', ' + place.lon + ', \'' + place.name.replace(/'/g, "\\'") + '\')">View</button> ' +
+                        '<button class="button small warning" onclick="editPlace(' + place.id + ', \'' + place.name.replace(/'/g, "\\'") + '\', ' + place.lat + ', ' + place.lon + ', ' + place.radius + ', \'' + place.webhook_url.replace(/'/g, "\\'") + '\', ' + place.enabled + ')">Edit</button> ' +
+                        '<button class="button small alert" onclick="deletePlace(' + place.id + ')">Delete</button>' +
+                    '</td>' +
+                '</tr>';
+                tbody.innerHTML += row;
+            });
+        });
+}
+
+function togglePlace(id, currentEnabled) {
+    fetch('/api/places', {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({id: id, enabled: !currentEnabled})
+    }).then(function() { loadPlaces(); });
+}
+
+function viewPlace(id, lat, lon, name) {
+    modalMode = 'view';
+    editingPlaceId = null;
+    document.getElementById('place-modal-title').textContent = 'View: ' + name;
+    document.getElementById('place-name').value = '';
+    document.getElementById('place-radius').value = '';
+    document.getElementById('place-webhook').value = '';
+    document.getElementById('place-enabled').checked = false;
+    // Hide form fields and save button in view mode
+    document.getElementById('place-name').parentElement.style.display = 'none';
+    document.getElementById('place-radius').parentElement.style.display = 'none';
+    document.getElementById('place-webhook').parentElement.style.display = 'none';
+    document.getElementById('place-enabled').parentElement.style.display = 'none';
+    document.getElementById('save-place-btn').style.display = 'none';
+    // Store coords for map centering
+    window._pendingPlaceView = {lat: lat, lon: lon};
+    $('#place-modal').foundation('open');
+}
+
+function editPlace(id, name, lat, lon, radius, webhook_url, enabled) {
+    modalMode = 'edit';
+    editingPlaceId = id;
+    document.getElementById('place-modal-title').textContent = 'Edit Known Place';
+    // Show form fields and save button
+    document.getElementById('place-name').parentElement.style.display = '';
+    document.getElementById('place-radius').parentElement.style.display = '';
+    document.getElementById('place-webhook').parentElement.style.display = '';
+    document.getElementById('place-enabled').parentElement.style.display = '';
+    document.getElementById('save-place-btn').style.display = '';
+    // Pre-populate fields
+    document.getElementById('place-name').value = name;
+    document.getElementById('place-radius').value = radius;
+    document.getElementById('place-webhook').value = webhook_url;
+    document.getElementById('place-enabled').checked = enabled;
+    // Store coords for map centering
+    window._pendingPlaceView = {lat: lat, lon: lon};
+    $('#place-modal').foundation('open');
+}
+
+function openAddPlaceModal() {
+    modalMode = 'add';
+    editingPlaceId = null;
+    document.getElementById('place-modal-title').textContent = 'Add Known Place';
+    // Show form fields and save button
+    document.getElementById('place-name').parentElement.style.display = '';
+    document.getElementById('place-radius').parentElement.style.display = '';
+    document.getElementById('place-webhook').parentElement.style.display = '';
+    document.getElementById('place-enabled').parentElement.style.display = '';
+    document.getElementById('save-place-btn').style.display = '';
+    // Clear fields
+    document.getElementById('place-name').value = '';
+    document.getElementById('place-radius').value = '100';
+    document.getElementById('place-webhook').value = '';
+    document.getElementById('place-enabled').checked = true;
+    window._pendingPlaceView = null;
+    $('#place-modal').foundation('open');
+}
+
+function testPlace(id) {
+    fetch('/api/places/' + id + '/test', {
+        method: 'POST'
+    })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+        alert('Webhook Test Result: ' + (data.status || data.error));
+    })
+    .catch(function(err) {
+        alert('Test failed: ' + err);
+    });
+}
+
+function deletePlace(id) {
+    fetch('/api/places', {
+        method: 'DELETE',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({id: id})
+    }).then(function() { loadPlaces(); });
+}
+
+function loadPlaces() {
+    fetch('/api/places')
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            var tbody = document.querySelector('#places-table tbody');
+            tbody.innerHTML = '';
+            data.places.forEach(function(place) {
+                var truncWebhook = place.webhook_url.length > 30 ? place.webhook_url.substring(0, 30) + '...' : place.webhook_url;
+                var enabledBtnClass = place.enabled ? 'success' : 'secondary';
+                var enabledBtnText = place.enabled ? 'On' : 'Off';
+                var row = '<tr>' +
+                    '<td data-label="Name">' + place.name + '</td>' +
+                    '<td data-label="Coordinates" class="show-for-medium">' + place.lat.toFixed(5) + ', ' + place.lon.toFixed(5) + '</td>' +
+                    '<td data-label="Radius">' + place.radius + '</td>' +
+                    '<td data-label="Webhook" class="show-for-medium" title="' + place.webhook_url + '">' + truncWebhook + '</td>' +
+                    '<td data-label="Enabled"><button class="button small ' + enabledBtnClass + '" onclick="togglePlace(' + place.id + ', ' + place.enabled + ')">' + enabledBtnText + '</button></td>' +
+                    '<td data-label="Actions">' +
+                        '<button class="button small" onclick="viewPlace(' + place.id + ', ' + place.lat + ', ' + place.lon + ', \'' + place.name.replace(/'/g, "\\'") + '\')">View</button> ' +
+                        '<button class="button small warning" onclick="editPlace(' + place.id + ', \'' + place.name.replace(/'/g, "\\'") + '\', ' + place.lat + ', ' + place.lon + ', ' + place.radius + ', \'' + place.webhook_url.replace(/'/g, "\\'") + '\', ' + place.enabled + ')">Edit</button> ' +
+                        '<button class="button small secondary" onclick="testPlace(' + place.id + ')">Test</button> ' +
+                        '<button class="button small alert" onclick="deletePlace(' + place.id + ')">Delete</button>' +
+                    '</td>' +
+                '</tr>';
+                tbody.innerHTML += row;
+            });
+        });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadPlaces();
+    document.getElementById('add-place-btn').addEventListener('click', openAddPlaceModal);
+});
+
