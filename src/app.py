@@ -3,6 +3,7 @@ import os
 import sys
 import math
 import random
+import requests
 from logging.handlers import RotatingFileHandler
 from flask import Flask, render_template, request, redirect, session, Response
 from models import UserModel,db,login,UserDataModel,LocationsModel,SharingPermissionModel,KnownPlaceModel
