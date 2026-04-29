@@ -105,9 +105,10 @@ source .venv/bin/activate
 
 print_info "Installing Python packages..."
 
+# Install dependencies
 $PIP install --upgrade pip > /dev/null 2>&1
-
-$PIP install "flask<2.3" flask-sqlalchemy flask-login pyOpenSSL > /dev/null 2>&1
+$PIP install -r requirements.txt > /dev/null 2>&1
+print_success "Dependencies installed"
 
 print_success "Dependencies installed"
 
@@ -159,21 +160,8 @@ print_success "Configuration saved to config.cfg"
 print_header "Database Setup"
 
 print_info "Initializing database..."
-$PYTHON -c "
-import sys
-sys.path.insert(0, 'src')
-from app import app, db
-with app.app_context():
-    db.create_all()
-print('Database initialized successfully')
-" 2>/dev/null || $PYTHON -c "
-import sys
-sys.path.insert(0, 'src')
-from models import db
-from app import app
-with app.app_context():
-    db.create_all()
-print('Database initialized successfully')
+$PYTHON -c "import sys; sys.path.insert(0, src); from app import app, db; from models import UserModel, LocationsModel, UserDataModel, SharingPermissionModel, KnownPlaceModel; with app.app_context(): db.create_all(); print("Database initialized successfully")" 2>/dev/null
+print_success "Database initialized"
 "
 
 print_success "Database initialized"
