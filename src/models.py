@@ -7,11 +7,17 @@ db = SQLAlchemy()
 
 class UserModel(UserMixin, db.Model):
     __tablename__ = 'users'
- 
+    
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(100), unique=True)
     password_hash = db.Column(db.String())
     api_token_hash = db.Column(db.String(), unique=True)
+    
+    # Relationships
+    locations = db.relationship('LocationsModel', backref='user', cascade="all, delete-orphan")
+    user_data = db.relationship('UserDataModel', backref='user', uselist=False, cascade="all, delete-orphan")
+    sharing_permissions = db.relationship('SharingPermissionModel', foreign_keys='SharingPermissionModel.data_owner_id', backref='owner', cascade="all, delete-orphan")
+    known_places = db.relationship('KnownPlaceModel', backref='user', cascade="all, delete-orphan")
  
     def set_password(self,password):
         self.password_hash = generate_password_hash(password)
