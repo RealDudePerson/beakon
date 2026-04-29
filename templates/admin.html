@@ -1,0 +1,53 @@
+{% extends "layout.html" %}
+{% block title %}Admin Dashboard{% endblock %}
+{% block top_menu_buttons %}
+<li><a href="{{url_for('dashboard')}}">Dashboard</a></li>
+<li><a href="{{url_for('speed')}}">Speed</a></li>
+{% if current_user.is_authenticated and is_admin %}
+<li><a href="{{url_for('admin_dashboard')}}">Admin</a></li>
+{% endif %}
+<li><a href="{{ url_for('logout') }}"><button type="button" class="button topbar-responsive-button">Logout</button></a></li>
+{% endblock %}
+{% block content %}
+<div class="grid-x grid-padding-x">
+  <div class="large-12 cell">
+    <h1>Admin Dashboard</h1>
+  </div>
+</div>
+<div class="grid-x grid-padding-x">
+  <div class="large-12 cell">
+    <div class="callout">
+      <h5>User Management</h5>
+      <table class="stack hover-unstriped">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Username</th>
+            <th>Admin Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for user in users %}
+          <tr>
+            <td data-label="ID">{{ user.id }}</td>
+            <td data-label="Username">{{ user.username }}</td>
+            <td data-label="Admin Status">
+              {% if user.is_admin %}
+                <span class="success label">Admin</span>
+              {% else %}
+                <span class="secondary label">User</span>
+              {% endif %}
+            </td>
+            <td data-label="Actions">
+              <button class="button small">Edit</button>
+              <button class="button small alert">Delete</button>
+            </td>
+          </tr>
+          {% endblock %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
