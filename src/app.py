@@ -249,11 +249,20 @@ def register():
             if UserModel.query.filter_by(username=username).first():
                 return ('Username already present')
             
+            # Check if this is the first user
+            is_first_user = UserModel.query.count() == 0
+            
             user = UserModel(username=username)
             user.set_password(password)
             db.session.add(user)
+            db.session.commit() # Commit to get the user.id
+            
+            # Create UserDataModel with admin status
+            user_data = UserDataModel(id=user.id, is_admin=is_first_user)
+            db.session.add(user_data)
             db.session.commit()
-            app.logger.info('%s registered successfully', username)
+            
+            app.logger.info('%s registered successfully (admin: %s)', username, is_first_user)
             return redirect('/login')
         return render_template('register.html')
     else:
