@@ -5,7 +5,8 @@ import math
 import random
 import requests
 from logging.handlers import RotatingFileHandler
-from flask import Flask, render_template, request, redirect, session, Response
+from flask import Flask, render_template, request, redirect, session, Response, abort
+from functools import wraps
 from models import UserModel,db,login,UserDataModel,LocationsModel,SharingPermissionModel,KnownPlaceModel
 from flask_login import login_required, current_user, login_user, logout_user
 from flask_talisman import Talisman
@@ -139,6 +140,28 @@ def get_locations_for_date(userid, date_str):
         LocationsModel.timestamp <= end_of_day
     ).order_by(LocationsModel.timestamp.asc()).all()
 
+# Context processor to make user admin status available globally to all templates
+@app.context_processor
+def inject_admin_status():
+    is_admin = False
+    if current_user.is_authenticated:
+        user_data = UserDataModel.query.filter_by(id=current_user.id).first()
+        if user_data and user_data.is_admin:
+            is_admin = True
+    return dict(is_admin=is_admin)
+
+# Admin required decorator
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return redirect('/login')
+        user_data = UserDataModel.query.filter_by(id=current_user.id).first()
+        if not user_data or not user_data.is_admin:
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated_function
+
 # App routes
 @app.route('/')
 def index():
@@ -218,6 +241,23 @@ def dashboard():
         fname=fname, lname=lname, username=username,
         sharing_permission_count=sharing_permission_count,
         sharing_permission_list=sharing_permission_list)
+
+# Admin Dashboard
+@app.route('/admin', methods=['GET'])
+@login_required
+@admin_required
+def admin_dashboard():
+    users = UserModel.query.all()
+    user_list = []
+    for u in users:
+        u_data = UserDataModel.query.filter_by(id=u.id).first()
+        is_admin = u_data.is_admin if u_data else False
+        user_list.append({
+            'id': u.id,
+            'username': u.username,
+            'is_admin': is_admin
+        })
+    return render_template('admin.html', users=user_list)
 
 # Used for seeing userid
 @app.route('/checkid')
