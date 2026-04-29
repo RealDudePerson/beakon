@@ -62,6 +62,11 @@ db.init_app(app)
 login.init_app(app)
 login.login_view = 'login'
 
+# Ensure all database tables exist
+with app.app_context():
+    from models import UserModel, LocationsModel, UserDataModel, SharingPermissionModel, KnownPlaceModel
+    db.create_all()
+
 # Initialize Scheduler
 scheduler = APScheduler()
 scheduler.init_app(app)
@@ -661,7 +666,4 @@ def speed():
     return render_template('speed.html')
 
 if __name__ == '__main__':
-    with app.app_context():
-        from src.models import UserModel, LocationsModel, UserDataModel, SharingPermissionModel, KnownPlaceModel
-        db.create_all()
     app.run(ssl_context="adhoc",host='0.0.0.0')
