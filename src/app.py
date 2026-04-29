@@ -242,22 +242,61 @@ def dashboard():
         sharing_permission_count=sharing_permission_count,
         sharing_permission_list=sharing_permission_list)
 
-# Admin Dashboard
-@app.route('/admin', methods=['GET'])
+@app.route('/admin/users/create', methods=['POST'])
 @login_required
 @admin_required
-def admin_dashboard():
-    users = UserModel.query.all()
-    user_list = []
-    for u in users:
-        u_data = UserDataModel.query.filter_by(id=u.id).first()
-        is_admin = u_data.is_admin if u_data else False
-        user_list.append({
-            'id': u.id,
-            'username': u.username,
-            'is_admin': is_admin
-        })
-    return render_template('admin.html', users=user_list)
+def admin_create_user():
+    data = request.get_json()
+    username = data['username'].lower()
+    if UserModel.query.filter_by(username=username).first():
+        return {'error': 'Username exists'}, 400
+    
+    user = UserModel(username=username)
+    user.set_password(data['password'])
+    db.session.add(user)
+    db.session.commit()
+    
+    user_data = UserDataModel(id=user.id, fname=data.get('fname'), lname=data.get('lname'), is_admin=data.get('is_admin', False))
+    db.session.add(user_data)
+    db.session.commit()
+    return Response(status=201)
+
+@app.route('/admin/users/<int:user_id>/update', methods=['POST'])
+@login_required
+@admin_required
+def admin_update_user(user_id):
+    data = request.get_json()
+    user_data = UserDataModel.query.filter_by(id=user_id).first()
+    if not user_data:
+        return {'error': 'User data not found'}, 404
+        
+    user_data.fname = data.get('fname', user_data.fname)
+    user_data.lname = data.get('lname', user_data.lname)
+    user_data.is_admin = data.get('is_admin', False)
+    db.session.commit()
+    return Response(status=200)
+
+@app.route('/admin/users/<int:user_id>/reset-token', methods=['POST'])
+@login_required
+@admin_required
+def admin_reset_token(user_id):
+    user = UserModel.query.get(user_id)
+    if not user:
+        return {'error': 'User not found'}, 404
+    user.set_api_token(request.form.get('secret', 'changeme')) # Simplistic token generation for now
+    db.session.commit()
+    return Response(status=200)
+
+@app.route('/admin/users/<int:user_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def admin_delete_user(user_id):
+    user = UserModel.query.get(user_id)
+    if not user:
+        return {'error': 'User not found'}, 404
+    db.session.delete(user)
+    db.session.commit()
+    return Response(status=200)
 
 # Used for seeing userid
 @app.route('/checkid')
@@ -713,6 +752,84 @@ def map(map_username):
 @app.route('/speed')
 def speed():
     return render_template('speed.html')
+
+# Admin Dashboard
+@app.route('/admin', methods=['GET'])
+@login_required
+@admin_required
+def admin_dashboard():
+    users = UserModel.query.all()
+    user_list = []
+    for u in users:
+        u_data = UserDataModel.query.filter_by(id=u.id).first()
+        is_admin = u_data.is_admin if u_data else False
+        fname = u_data.fname if u_data else ''
+        lname = u_data.lname if u_data else ''
+        user_list.append({
+            'id': u.id,
+            'username': u.username,
+            'fname': fname,
+            'lname': lname,
+            'is_admin': is_admin
+        })
+    return render_template('admin.html', users=user_list)
+
+@app.route('/admin/users/create', methods=['POST'])
+@login_required
+@admin_required
+def admin_create_user():
+    data = request.get_json()
+    username = data['username'].lower()
+    if UserModel.query.filter_by(username=username).first():
+        return {'error': 'Username exists'}, 400
+    
+    user = UserModel(username=username)
+    user.set_password(data['password'])
+    db.session.add(user)
+    db.session.commit()
+    
+    user_data = UserDataModel(id=user.id, fname=data.get('fname'), lname=data.get('lname'), is_admin=data.get('is_admin', False))
+    db.session.add(user_data)
+    db.session.commit()
+    return Response(status=201)
+
+@app.route('/admin/users/<int:user_id>/update', methods=['POST'])
+@login_required
+@admin_required
+def admin_update_user(user_id):
+    data = request.get_json()
+    user_data = UserDataModel.query.filter_by(id=user_id).first()
+    if not user_data:
+        return {'error': 'User data not found'}, 404
+        
+    user_data.fname = data.get('fname', user_data.fname)
+    user_data.lname = data.get('lname', user_data.lname)
+    user_data.is_admin = data.get('is_admin', False)
+    db.session.commit()
+    return Response(status=200)
+
+@app.route('/admin/users/<int:user_id>/reset-token', methods=['POST'])
+@login_required
+@admin_required
+def admin_reset_token(user_id):
+    user = UserModel.query.get(user_id)
+    if not user:
+        return {'error': 'User not found'}, 404
+    import secrets
+    user.set_api_token(secrets.token_hex(16))
+    db.session.commit()
+    return Response(status=200)
+
+@app.route('/admin/users/<int:user_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def admin_delete_user(user_id):
+    user = UserModel.query.get(user_id)
+    if not user:
+        return {'error': 'User not found'}, 404
+    db.session.delete(user)
+    db.session.commit()
+    return Response(status=200)
 
 if __name__ == '__main__':
     app.run(ssl_context="adhoc",host='0.0.0.0')
