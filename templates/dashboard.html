@@ -1,10 +1,10 @@
 {% extends "layout.html" %}
 {% block title %}Dashboard{% endblock %}
 {% block top_menu_buttons %}
-<li><a href="{{url_for('account')}}">Account</a></li>
-<li><a href="{{url_for('record_location')}}">UpdateLocation</a></li>
-<li><a href="{{ url_for('logout') }}"><button class="button topbar-responsive-button" type="button">Logout</button></a></li>
-{% endblock %}
+                        <li><a href="{{url_for('account')}}">Account</a></li>
+                        <li><a href="{{url_for('speed')}}">Speed</a></li>
+                        <li><a href="{{ url_for('logout') }}"><button type="button" class="button topbar-responsive-button">Logout</button></a></li>
+                        {% endblock %}
 {% block content %}
 <div class="grid-x grid-padding-x">
   <div class="large-12 cell">
