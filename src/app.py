@@ -774,6 +774,7 @@ def admin_dashboard():
         })
     return render_template('admin.html', users=user_list)
 
+
 @app.route('/admin/users/create', methods=['POST'])
 @login_required
 @admin_required
