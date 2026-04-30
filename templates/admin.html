@@ -40,8 +40,8 @@
               {% endif %}
             </td>
             <td data-label="Actions">
-              <button class="button small">Edit</button>
-              <button class="button small alert">Delete</button>
+              <button class="button small" onclick="openEditModal({id: {{user.id}}, username: '{{user.username}}', fname: '{{user.fname}}', lname: '{{user.lname}}', is_admin: {{user.is_admin|lower}}})">Edit</button>
+              <button class="button small alert" onclick="deleteUser({{user.id}})">Delete</button>
             </td>
           </tr>
           {% endfor %}
@@ -50,4 +50,20 @@
     </div>
   </div>
 </div>
+
+<div class="reveal" id="user-modal" data-reveal>
+  <h4 id="user-modal-title">User</h4>
+  <input type="hidden" id="user-id">
+  <label>Username <input type="text" id="user-username"></label>
+  <label>Password <input type="password" id="user-password"></label>
+  <label>First Name <input type="text" id="user-fname"></label>
+  <label>Last Name <input type="text" id="user-lname"></label>
+  <label><input type="checkbox" id="user-is-admin"> Is Admin</label>
+  <button class="button" onclick="saveUser()">Save</button>
+  <button class="close-button" data-close aria-label="Close modal" type="button"><span aria-hidden="true">&times;</span></button>
+</div>
+{% endblock %}
+
+{% block script %}
+<script src="{{ url_for('static', filename = 'js/admin.js') }}"></script>
 {% endblock %}
