@@ -156,3 +156,5 @@ class KnownPlaceModel(db.Model):
     webhook_url = db.Column(db.String(255))
     enabled = db.Column(db.Boolean, default=True)
     is_inside = db.Column(db.Boolean, default=False)
+    last_webhook_time = db.Column(db.DateTime())
+    last_webhook_status = db.Column(db.String(20))

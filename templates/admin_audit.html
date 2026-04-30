@@ -1,0 +1,14 @@
+{% extends "layout.html" %}
+{% block title %}Audit Logs{% endblock %}
+{% block content %}
+<div class="grid-x grid-padding-x">
+    <div class="large-12 cell">
+        <h1>Audit Logs</h1>
+        <div class="callout" style="height: 500px; overflow-y: scroll; font-family: monospace;">
+            {% for line in logs %}
+                {{ line }}<br>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
