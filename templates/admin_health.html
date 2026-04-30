@@ -1,0 +1,34 @@
+{% extends "layout.html" %}
+{% block title %}Admin Health{% endblock %}
+{% block content %}
+<div class="grid-x grid-padding-x">
+    <div class="large-12 cell">
+        <h1>System Health</h1>
+        <div class="callout">
+            <h5>Scheduler</h5>
+            <p>Next geofencing run: {{ next_run }}</p>
+        </div>
+        <div class="callout">
+            <h5>Last Global Location Update</h5>
+            <p>{{ last_loc_time }}</p>
+        </div>
+        <div class="callout">
+            <h5>Webhooks</h5>
+            <table>
+                <thead>
+                    <tr><th>Place</th><th>Last Webhook</th><th>Status</th></tr>
+                </thead>
+                <tbody>
+                    {% for place in places %}
+                    <tr>
+                        <td>{{ place.name }}</td>
+                        <td>{{ place.last_webhook_time }}</td>
+                        <td>{{ place.last_webhook_status }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

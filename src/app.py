@@ -697,7 +697,8 @@ def map(map_username):
 def speed():
     return render_template('speed.html')
 
-# Admin Dashboard
+# Admin Dashboard Routes
+
 @app.route('/admin', methods=['GET'])
 @login_required
 @admin_required
@@ -718,6 +719,36 @@ def admin_dashboard():
         })
     return render_template('admin.html', users=user_list)
 
+@app.route('/admin/health', methods=['GET'])
+@login_required
+@admin_required
+def admin_health():
+    # Scheduler Status
+    job = scheduler.get_job('geofencing_task')
+    next_run = job.next_run_time if job else "Not scheduled"
+    
+    # Webhook Status
+    places = KnownPlaceModel.query.all()
+    
+    # Last location update
+    last_loc = LocationsModel.query.order_by(LocationsModel.timestamp.desc()).first()
+    last_loc_time = last_loc.timestamp if last_loc else "No data"
+    
+    return render_template('admin_health.html', 
+                           next_run=next_run, 
+                           places=places, 
+                           last_loc_time=last_loc_time)
+
+@app.route('/admin/audit', methods=['GET'])
+@login_required
+@admin_required
+def admin_audit():
+    log_path = os.path.join(app.instance_path, 'logs', 'beakon.log')
+    logs = []
+    if os.path.exists(log_path):
+        with open(log_path, 'r') as f:
+            logs = f.readlines()[-100:] # Last 100 lines
+    return render_template('admin_audit.html', logs=logs)
 
 @app.route('/admin/users/create', methods=['POST'])
 @login_required
