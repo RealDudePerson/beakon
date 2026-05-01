@@ -2,7 +2,10 @@
 {% block title %}Map{% endblock %}
 {% block top_menu_buttons %}
 <li><a href="{{url_for('dashboard')}}">Dashboard</a></li>
-<li><a href="{{ url_for('logout') }}"><button class="button topbar-responsive-button" type="button">Logout</button></a></li>
+{% if current_user.is_authenticated and is_admin %}
+                        <li><a href="{{url_for('admin_dashboard')}}">Admin</a></li>
+                        {% endif %}
+                        <li><a href="{{ url_for('logout') }}"><button class="button topbar-responsive-button" type="button">Logout</button></a></li>
 {% endblock %}
 {% block content %}
 <div class="grid-x grid-padding-x">

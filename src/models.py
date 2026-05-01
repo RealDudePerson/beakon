@@ -7,11 +7,17 @@ db = SQLAlchemy()
 
 class UserModel(UserMixin, db.Model):
     __tablename__ = 'users'
- 
+    
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(100), unique=True)
     password_hash = db.Column(db.String())
     api_token_hash = db.Column(db.String(), unique=True)
+    
+    # Relationships
+    locations = db.relationship('LocationsModel', backref='user', foreign_keys='LocationsModel.userid', cascade="all, delete-orphan")
+    user_data = db.relationship('UserDataModel', backref='user', uselist=False, foreign_keys='UserDataModel.id', cascade="all, delete-orphan")
+    sharing_permissions = db.relationship('SharingPermissionModel', foreign_keys='SharingPermissionModel.data_owner_id', backref='owner', cascade="all, delete-orphan")
+    known_places = db.relationship('KnownPlaceModel', backref='user', foreign_keys='KnownPlaceModel.userid', cascade="all, delete-orphan")
  
     def set_password(self,password):
         self.password_hash = generate_password_hash(password)
@@ -40,7 +46,7 @@ class LocationsModel(db.Model):
     lon = db.Column(db.Float())
     acc = db.Column(db.Float())
     timestamp = db.Column(db.DateTime())
-    userid = db.Column(db.Integer)
+    userid = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
     batt = db.Column(db.Integer)
     ischarging = db.Column(db.Boolean)
 
@@ -80,7 +86,7 @@ class LocationsModel(db.Model):
 
 class UserDataModel(db.Model):
     __tablename__ = 'user_data'
-    id = db.Column(db.Integer, primary_key=True) #this ID is tied to the user ID when setting user data from /updateinfo
+    id = db.Column(db.Integer, db.ForeignKey('users.id'), primary_key=True) #this ID is tied to the user ID when setting user data from /updateinfo
     fname = db.Column(db.String(30))
     lname = db.Column(db.String(40))
     access_to = db.Column(db.String(100))
@@ -111,9 +117,9 @@ class SharingPermissionModel(db.Model):
     __tablename__ = 'sharing_permission'
     id = db.Column(db.Integer, primary_key=True)
     data_owner_username = db.Column(db.String(100))
-    data_owner_id = db.Column(db.Integer)
+    data_owner_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     shared_with_username = db.Column(db.String(100))
-    shared_with_id = db.Column(db.Integer)
+    shared_with_id = db.Column(db.Integer, db.ForeignKey('users.id'))
 
     def set_data_owner_username(self,data_owner_username):
         self.data_owner_username = data_owner_username
@@ -150,3 +156,5 @@ class KnownPlaceModel(db.Model):
     webhook_url = db.Column(db.String(255))
     enabled = db.Column(db.Boolean, default=True)
     is_inside = db.Column(db.Boolean, default=False)
+    last_webhook_time = db.Column(db.DateTime())
+    last_webhook_status = db.Column(db.String(20))
