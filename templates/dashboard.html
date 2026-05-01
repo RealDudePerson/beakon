@@ -21,6 +21,9 @@
       <div class="large-12 cell">
         <div style="margin-bottom: 10px;">
           <input type="text" id="date-picker" placeholder="Select date to view path">
+          <label>
+            <input type="checkbox" id="geofence-toggle" checked> Show Geofences
+          </label>
         </div>
         {% if lat != Null %}
         <div class="responsive-embed">
@@ -92,6 +95,26 @@
 
         var markersLayer = L.layerGroup().addTo(map);
         var locationsLayer = L.layerGroup().addTo(map);
+        var geofencesLayer = L.layerGroup().addTo(map);
+
+        var knownPlaces = {{ known_places|tojson }};
+        function renderGeofences() {
+            geofencesLayer.clearLayers();
+            if (document.getElementById('geofence-toggle').checked) {
+                knownPlaces.forEach(function(place) {
+                    if (place.enabled) {
+                        L.circle([place.lat, place.lon], {
+                            radius: place.radius,
+                            color: 'blue',
+                            fillColor: '#3388ff',
+                            fillOpacity: 0.2
+                        }).addTo(geofencesLayer).bindPopup(place.name);
+                    }
+                });
+            }
+        }
+        renderGeofences();
+        document.getElementById('geofence-toggle').addEventListener('change', renderGeofences);
 
         flatpickr('#date-picker', {
             defaultDate: null,
