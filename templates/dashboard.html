@@ -21,9 +21,6 @@
       <div class="large-12 cell">
         <div style="margin-bottom: 10px;">
           <input type="text" id="date-picker" placeholder="Select date to view path">
-          <label>
-            <input type="checkbox" id="geofence-toggle" checked> Show Geofences
-          </label>
         </div>
         {% if lat != Null %}
         <div class="responsive-embed">
@@ -57,12 +54,18 @@
       </ul>
       </div>
       {% endif %}
-      <div class="callout">
+        <div class="callout">
         <label class="toggle-switch">
           <input type="checkbox" id="tracking-toggle">
           <span class="toggle-slider"></span>
         </label>
         <span id="tracking-status" class="tracking-status off">Tracking Off</span>
+        <br><br>
+        <label class="toggle-switch">
+          <input type="checkbox" id="geofence-toggle" checked>
+          <span class="toggle-slider"></span>
+        </label>
+        <span id="geofence-status" class="tracking-status on">Geofence Visibility: On</span>
         <div id="tracking-error" class="callout alert hide" style="margin-top: 10px;"></div>
       </div>
       <br>
@@ -100,7 +103,11 @@
         var knownPlaces = {{ known_places|tojson }};
         function renderGeofences() {
             geofencesLayer.clearLayers();
-            if (document.getElementById('geofence-toggle').checked) {
+            var isChecked = document.getElementById('geofence-toggle').checked;
+            document.getElementById('geofence-status').textContent = isChecked ? 'Geofence Visibility: On' : 'Geofence Visibility: Off';
+            document.getElementById('geofence-status').className = 'tracking-status ' + (isChecked ? 'on' : 'off');
+            
+            if (isChecked) {
                 knownPlaces.forEach(function(place) {
                     if (place.enabled) {
                         L.circle([place.lat, place.lon], {
