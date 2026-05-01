@@ -779,8 +779,10 @@ def admin_create_user():
 @admin_required
 def admin_update_user(user_id):
     data = request.get_json()
+    app.logger.debug(f"DEBUG: Received update request for user {user_id}. Data: {data}")
     user_data = UserDataModel.query.filter_by(id=user_id).first()
     if not user_data:
+        app.logger.error(f"DEBUG: User data not found for user {user_id}")
         return {'error': 'User data not found'}, 404
         
     user_data.fname = data.get('fname', user_data.fname)
