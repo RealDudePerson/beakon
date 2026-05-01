@@ -1,5 +1,6 @@
 import requests
 import math
+import datetime
 from models import db, LocationsModel, KnownPlaceModel, UserModel
 
 def haversine_meters(lat1, lon1, lat2, lon2):
@@ -49,9 +50,14 @@ def check_geofences(app):
                     payload["lname"] = user_data.lname
                     
                 try:
-                    requests.post(place.webhook_url, json=payload, timeout=5)
+                    response = requests.post(place.webhook_url, json=payload, timeout=5)
+                    place.last_webhook_time = datetime.datetime.now()
+                    place.last_webhook_status = "success" if response.status_code == 200 else f"error:{response.status_code}"
                 except Exception as e:
                     import logging
                     logging.error(f"Webhook failed for place {place.name}: {e}")
+                    place.last_webhook_time = datetime.datetime.now()
+                    place.last_webhook_status = "failed"
+                db.session.commit()
     finally:
         ctx.pop()

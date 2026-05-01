@@ -5,7 +5,8 @@ import math
 import random
 import requests
 from logging.handlers import RotatingFileHandler
-from flask import Flask, render_template, request, redirect, session, Response
+from flask import Flask, render_template, request, redirect, session, Response, abort
+from functools import wraps
 from models import UserModel,db,login,UserDataModel,LocationsModel,SharingPermissionModel,KnownPlaceModel
 from flask_login import login_required, current_user, login_user, logout_user
 from flask_talisman import Talisman
@@ -61,6 +62,11 @@ with open(config_path, 'r') as f:
 db.init_app(app)
 login.init_app(app)
 login.login_view = 'login'
+
+# Ensure all database tables exist
+with app.app_context():
+    from models import UserModel, LocationsModel, UserDataModel, SharingPermissionModel, KnownPlaceModel
+    db.create_all()
 
 # Initialize Scheduler
 scheduler = APScheduler()
@@ -133,6 +139,28 @@ def get_locations_for_date(userid, date_str):
         LocationsModel.timestamp >= start_of_day,
         LocationsModel.timestamp <= end_of_day
     ).order_by(LocationsModel.timestamp.asc()).all()
+
+# Context processor to make user admin status available globally to all templates
+@app.context_processor
+def inject_admin_status():
+    is_admin = False
+    if current_user.is_authenticated:
+        user_data = UserDataModel.query.filter_by(id=current_user.id).first()
+        if user_data and user_data.is_admin:
+            is_admin = True
+    return dict(is_admin=is_admin)
+
+# Admin required decorator
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return redirect('/login')
+        user_data = UserDataModel.query.filter_by(id=current_user.id).first()
+        if not user_data or not user_data.is_admin:
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated_function
 
 # App routes
 @app.route('/')
@@ -244,11 +272,20 @@ def register():
             if UserModel.query.filter_by(username=username).first():
                 return ('Username already present')
             
+            # Check if this is the first user
+            is_first_user = UserModel.query.count() == 0
+            
             user = UserModel(username=username)
             user.set_password(password)
             db.session.add(user)
+            db.session.commit() # Commit to get the user.id
+            
+            # Create UserDataModel with admin status
+            user_data = UserDataModel(id=user.id, is_admin=is_first_user)
+            db.session.add(user_data)
             db.session.commit()
-            app.logger.info('%s registered successfully', username)
+            
+            app.logger.info('%s registered successfully (admin: %s)', username, is_first_user)
             return redirect('/login')
         return render_template('register.html')
     else:
@@ -660,8 +697,115 @@ def map(map_username):
 def speed():
     return render_template('speed.html')
 
+# Admin Dashboard Routes
+
+@app.route('/admin', methods=['GET'])
+@login_required
+@admin_required
+def admin_dashboard():
+    users = UserModel.query.all()
+    user_list = []
+    for u in users:
+        u_data = UserDataModel.query.filter_by(id=u.id).first()
+        is_admin = u_data.is_admin if u_data else False
+        fname = u_data.fname if u_data else ''
+        lname = u_data.lname if u_data else ''
+        user_list.append({
+            'id': u.id,
+            'username': u.username,
+            'fname': fname,
+            'lname': lname,
+            'is_admin': is_admin
+        })
+    return render_template('admin.html', users=user_list)
+
+@app.route('/admin/health', methods=['GET'])
+@login_required
+@admin_required
+def admin_health():
+    # Scheduler Status
+    job = scheduler.get_job('geofencing_task')
+    next_run = job.next_run_time if job else "Not scheduled"
+    
+    # Webhook Status
+    places = KnownPlaceModel.query.all()
+    
+    # Last location update
+    last_loc = LocationsModel.query.order_by(LocationsModel.timestamp.desc()).first()
+    last_loc_time = last_loc.timestamp if last_loc else "No data"
+    
+    return render_template('admin_health.html', 
+                           next_run=next_run, 
+                           places=places, 
+                           last_loc_time=last_loc_time)
+
+@app.route('/admin/audit', methods=['GET'])
+@login_required
+@admin_required
+def admin_audit():
+    log_path = os.path.join(app.instance_path, 'logs', 'beakon.log')
+    logs = []
+    if os.path.exists(log_path):
+        with open(log_path, 'r') as f:
+            logs = f.readlines()[-100:] # Last 100 lines
+    return render_template('admin_audit.html', logs=logs)
+
+@app.route('/admin/users/create', methods=['POST'])
+@login_required
+@admin_required
+def admin_create_user():
+    data = request.get_json()
+    username = data['username'].lower()
+    if UserModel.query.filter_by(username=username).first():
+        return {'error': 'Username exists'}, 400
+    
+    user = UserModel(username=username)
+    user.set_password(data['password'])
+    db.session.add(user)
+    db.session.commit()
+    
+    user_data = UserDataModel(id=user.id, fname=data.get('fname'), lname=data.get('lname'), is_admin=data.get('is_admin', False))
+    db.session.add(user_data)
+    db.session.commit()
+    return Response(status=201)
+
+@app.route('/admin/users/<int:user_id>/update', methods=['POST'])
+@login_required
+@admin_required
+def admin_update_user(user_id):
+    data = request.get_json()
+    user_data = UserDataModel.query.filter_by(id=user_id).first()
+    if not user_data:
+        return {'error': 'User data not found'}, 404
+        
+    user_data.fname = data.get('fname', user_data.fname)
+    user_data.lname = data.get('lname', user_data.lname)
+    user_data.is_admin = data.get('is_admin', False)
+    db.session.commit()
+    return Response(status=200)
+
+@app.route('/admin/users/<int:user_id>/reset-token', methods=['POST'])
+@login_required
+@admin_required
+def admin_reset_token(user_id):
+    user = UserModel.query.get(user_id)
+    if not user:
+        return {'error': 'User not found'}, 404
+    import secrets
+    user.set_api_token(secrets.token_hex(16))
+    db.session.commit()
+    return Response(status=200)
+
+@app.route('/admin/users/<int:user_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def admin_delete_user(user_id):
+    user = UserModel.query.get(user_id)
+    if not user:
+        return {'error': 'User not found'}, 404
+    db.session.delete(user)
+    db.session.commit()
+    return Response(status=200)
+
 if __name__ == '__main__':
-    with app.app_context():
-        from src.models import UserModel, LocationsModel, UserDataModel, SharingPermissionModel, KnownPlaceModel
-        db.create_all()
     app.run(ssl_context="adhoc",host='0.0.0.0')
