@@ -781,9 +781,11 @@ def admin_update_user(user_id):
     data = request.get_json()
     app.logger.debug(f"DEBUG: Received update request for user {user_id}. Data: {data}")
     user_data = UserDataModel.query.filter_by(id=user_id).first()
+    
     if not user_data:
-        app.logger.error(f"DEBUG: User data not found for user {user_id}")
-        return {'error': 'User data not found'}, 404
+        app.logger.info(f"Creating missing user_data record for user {user_id}")
+        user_data = UserDataModel(id=user_id)
+        db.session.add(user_data)
         
     user_data.fname = data.get('fname', user_data.fname)
     user_data.lname = data.get('lname', user_data.lname)
