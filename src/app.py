@@ -199,6 +199,9 @@ def dashboard():
         lname = ""
     
     locations = get_filtered_locations(id)
+    known_places = KnownPlaceModel.query.filter_by(userid=id).all()
+    places_data = [{'name': p.name, 'lat': p.lat, 'lon': p.lon, 'radius': p.radius, 'enabled': p.enabled} for p in known_places]
+    
     sharing_permission = SharingPermissionModel.query.filter_by(shared_with_id=id).all()
     if sharing_permission:
         sharing_permission_count = len(sharing_permission)
@@ -235,12 +238,14 @@ def dashboard():
             sharing_permission_list=sharing_permission_list,
             sharing_permission_count=sharing_permission_count,
             batt=batt, ischarging=ischarging,
-            locations=locations_data)
+            locations=locations_data,
+            known_places=places_data)
     
     return render_template('dashboard.html',
         fname=fname, lname=lname, username=username,
         sharing_permission_count=sharing_permission_count,
-        sharing_permission_list=sharing_permission_list)
+        sharing_permission_list=sharing_permission_list,
+        known_places=places_data)
 
 # Used for seeing userid
 @app.route('/checkid')
