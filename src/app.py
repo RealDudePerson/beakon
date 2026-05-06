@@ -72,7 +72,8 @@ with app.app_context():
 scheduler = APScheduler()
 scheduler.init_app(app)
 scheduler.start()
-scheduler.add_job(id='geofencing_task', func=check_geofences, args=[app], trigger='interval', minutes=5)
+geofence_interval = int(app.config.get('GEOFENCE_CHECK_INTERVAL', 5))
+scheduler.add_job(id='geofencing_task', func=check_geofences, args=[app], trigger='interval', minutes=geofence_interval)
 
 # Cookie security settings
 app.config['SESSION_COOKIE_SECURE'] = True
