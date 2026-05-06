@@ -71,7 +71,7 @@ def check_geofences(app):
 
             place.is_inside = is_inside
 
-            event = "entry" if is_inside else "exit"
+            event = "arrived" if is_inside else "left"
             payload = {
                 "event": event,
                 "place": place.name,
