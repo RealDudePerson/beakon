@@ -158,3 +158,4 @@ class KnownPlaceModel(db.Model):
     is_inside = db.Column(db.Boolean, default=False)
     last_webhook_time = db.Column(db.DateTime())
     last_webhook_status = db.Column(db.String(20))
+    include_coords_in_webhook = db.Column(db.Boolean, default=False)

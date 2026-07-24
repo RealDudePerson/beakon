@@ -480,10 +480,10 @@ def api_places():
     id = current_user.get_id()
     if request.method == 'GET':
         places = KnownPlaceModel.query.filter_by(userid=id).all()
-        return {'places': [{'id': p.id, 'name': p.name, 'lat': p.lat, 'lon': p.lon, 'radius': p.radius, 'webhook_url': p.webhook_url, 'enabled': p.enabled} for p in places]}
+        return {'places': [{'id': p.id, 'name': p.name, 'lat': p.lat, 'lon': p.lon, 'radius': p.radius, 'webhook_url': p.webhook_url, 'enabled': p.enabled, 'include_coords_in_webhook': p.include_coords_in_webhook} for p in places]}
     elif request.method == 'POST':
         data = request.get_json()
-        place = KnownPlaceModel(userid=id, name=data['name'], lat=data['lat'], lon=data['lon'], radius=data.get('radius', 100), webhook_url=data['webhook_url'], enabled=data.get('enabled', True))
+        place = KnownPlaceModel(userid=id, name=data['name'], lat=data['lat'], lon=data['lon'], radius=data.get('radius', 100), webhook_url=data['webhook_url'], enabled=data.get('enabled', True), include_coords_in_webhook=data.get('include_coords_in_webhook', False))
         db.session.add(place)
         db.session.commit()
         return Response(status=201)
@@ -498,6 +498,7 @@ def api_places():
         if 'radius' in data: place.radius = data['radius']
         if 'webhook_url' in data: place.webhook_url = data['webhook_url']
         if 'enabled' in data: place.enabled = data['enabled']
+        if 'include_coords_in_webhook' in data: place.include_coords_in_webhook = data['include_coords_in_webhook']
         db.session.commit()
         return Response(status=200)
     elif request.method == 'DELETE':
@@ -522,6 +523,11 @@ def api_test_place(place_id):
         "fname": "Test",
         "lname": "User"
     }
+    if place.include_coords_in_webhook:
+        latest = LocationsModel.query.filter_by(userid=id).order_by(LocationsModel.id.desc()).first()
+        if latest and latest.lat is not None and latest.lon is not None:
+            payload["lat"] = latest.lat
+            payload["lon"] = latest.lon
     try:
         response = requests.post(place.webhook_url, json=payload, timeout=5)
         return {'status': response.status_code}, 200

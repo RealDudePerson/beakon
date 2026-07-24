@@ -77,6 +77,9 @@ def check_geofences(app):
                 "place": place.name,
                 "username": user.username,
             }
+            if place.include_coords_in_webhook:
+                payload["lat"] = latest_loc.lat
+                payload["lon"] = latest_loc.lon
 
             user_data = user_data_map.get(user.id)
             if user_data:

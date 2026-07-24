@@ -201,11 +201,13 @@ function viewPlace(id, lat, lon, name) {
     document.getElementById('place-name').value = '';
     document.getElementById('place-radius').value = '';
     document.getElementById('place-webhook').value = '';
+    document.getElementById('place-include-coords').checked = false;
     document.getElementById('place-enabled').checked = false;
     // Hide form fields and save button in view mode
     document.getElementById('place-name').parentElement.style.display = 'none';
     document.getElementById('place-radius').parentElement.style.display = 'none';
     document.getElementById('place-webhook').parentElement.style.display = 'none';
+    document.getElementById('place-include-coords').parentElement.style.display = 'none';
     document.getElementById('place-enabled').parentElement.style.display = 'none';
     document.getElementById('save-place-btn').style.display = 'none';
     // Store coords for map centering
@@ -213,7 +215,7 @@ function viewPlace(id, lat, lon, name) {
     $('#place-modal').foundation('open');
 }
 
-function editPlace(id, name, lat, lon, radius, webhook_url, enabled) {
+function editPlace(id, name, lat, lon, radius, webhook_url, enabled, include_coords_in_webhook) {
     modalMode = 'edit';
     editingPlaceId = id;
     document.getElementById('place-modal-title').textContent = 'Edit Known Place';
@@ -221,12 +223,14 @@ function editPlace(id, name, lat, lon, radius, webhook_url, enabled) {
     document.getElementById('place-name').parentElement.style.display = '';
     document.getElementById('place-radius').parentElement.style.display = '';
     document.getElementById('place-webhook').parentElement.style.display = '';
+    document.getElementById('place-include-coords').parentElement.style.display = '';
     document.getElementById('place-enabled').parentElement.style.display = '';
     document.getElementById('save-place-btn').style.display = '';
     // Pre-populate fields
     document.getElementById('place-name').value = name;
     document.getElementById('place-radius').value = radius;
     document.getElementById('place-webhook').value = webhook_url;
+    document.getElementById('place-include-coords').checked = include_coords_in_webhook;
     document.getElementById('place-enabled').checked = enabled;
     // Store coords for map centering
     window._pendingPlaceView = {lat: lat, lon: lon};
@@ -241,12 +245,14 @@ function openAddPlaceModal() {
     document.getElementById('place-name').parentElement.style.display = '';
     document.getElementById('place-radius').parentElement.style.display = '';
     document.getElementById('place-webhook').parentElement.style.display = '';
+    document.getElementById('place-include-coords').parentElement.style.display = '';
     document.getElementById('place-enabled').parentElement.style.display = '';
     document.getElementById('save-place-btn').style.display = '';
     // Clear fields
     document.getElementById('place-name').value = '';
     document.getElementById('place-radius').value = '100';
     document.getElementById('place-webhook').value = '';
+    document.getElementById('place-include-coords').checked = false;
     document.getElementById('place-enabled').checked = true;
     window._pendingPlaceView = null;
     $('#place-modal').foundation('open');
@@ -291,7 +297,7 @@ function loadPlaces() {
                     '<td data-label="Enabled"><button class="button small ' + enabledBtnClass + '" onclick="togglePlace(' + place.id + ', ' + place.enabled + ')">' + enabledBtnText + '</button></td>' +
                     '<td data-label="Actions">' +
                         '<button class="button small" onclick="viewPlace(' + place.id + ', ' + place.lat + ', ' + place.lon + ', \'' + place.name.replace(/'/g, "\\'") + '\')">View</button> ' +
-                        '<button class="button small warning" onclick="editPlace(' + place.id + ', \'' + place.name.replace(/'/g, "\\'") + '\', ' + place.lat + ', ' + place.lon + ', ' + place.radius + ', \'' + place.webhook_url.replace(/'/g, "\\'") + '\', ' + place.enabled + ')">Edit</button> ' +
+                        '<button class="button small warning" onclick="editPlace(' + place.id + ', \'' + place.name.replace(/'/g, "\\'") + '\', ' + place.lat + ', ' + place.lon + ', ' + place.radius + ', \'' + place.webhook_url.replace(/'/g, "\\'") + '\', ' + place.enabled + ', ' + (place.include_coords_in_webhook ? 'true' : 'false') + ')">Edit</button> ' +
                         '<button class="button small secondary" onclick="testPlace(' + place.id + ')">Test</button> ' +
                         '<button class="button small alert" onclick="deletePlace(' + place.id + ')">Delete</button>' +
                     '</td>' +

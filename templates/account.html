@@ -201,6 +201,7 @@
             <label>Webhook URL
                 <input type="text" id="place-webhook" placeholder="Webhook URL">
             </label>
+            <label><input type="checkbox" id="place-include-coords"> Include coords in webhook</label>
             <label><input type="checkbox" id="place-enabled" checked> Enabled</label>
         </div>
         <div class="cell medium-6">
@@ -259,7 +260,8 @@
                     lon: marker.getLatLng().lng,
                     radius: parseInt(document.getElementById('place-radius').value) || 100,
                     webhook_url: document.getElementById('place-webhook').value,
-                    enabled: document.getElementById('place-enabled').checked
+                    enabled: document.getElementById('place-enabled').checked,
+                    include_coords_in_webhook: document.getElementById('place-include-coords').checked
                 };
 
                 if (modalMode === 'edit' && editingPlaceId) {
