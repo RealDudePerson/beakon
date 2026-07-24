@@ -13,6 +13,7 @@
 
 ### Database Operations
 - **Schema Updates**: `db.create_all()` at startup is used for schema management. If a table (like `known_places`) is missing in production, run manual `CREATE TABLE` SQL command via `sqlite3 instance/beakon.db`.
+- **Manual Migrations**: One-off `ALTER TABLE` changes to existing tables live in `migrations/` as sequentially numbered `.sql` files (e.g. `migrations/001_known_places_webhook_columns.sql`). Apply with `sqlite3 instance/beakon.db < migrations/<file>.sql`.
 - **Performance**: Use `.yield_per(100)` for large dataset queries in `src/app.py`.
 
 ### Security

@@ -1,6 +1,10 @@
 # ignore instance folder
 instance/
 
+# ignore generated config (contains SECRET_KEY and MAPBOX_API_KEY)
+config.cfg
+config.cfg.bak
+
 # ignore our virtual environment
 venv/
 .venv/
