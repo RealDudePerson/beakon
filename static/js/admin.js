@@ -44,15 +44,17 @@ function deleteUser(id) {
     }
 }
 
-function openEditModal(user) {
+function openEditModal(id) {
+    var user = adminUsers.find(function(u) { return u.id === id; });
+    if (!user) return;
     document.getElementById('user-modal-title').textContent = 'Edit User';
     document.getElementById('user-id').value = user.id;
     document.getElementById('user-username').value = user.username;
     document.getElementById('user-username').disabled = true;
     document.getElementById('user-password').parentElement.style.display = 'none';
-    document.getElementById('user-fname').value = user.fname;
-    document.getElementById('user-lname').value = user.lname;
-    document.getElementById('user-is-admin').checked = user.is_admin;
+    document.getElementById('user-fname').value = user.fname || '';
+    document.getElementById('user-lname').value = user.lname || '';
+    document.getElementById('user-is-admin').checked = !!user.is_admin;
     $('#user-modal').foundation('open');
 }
 

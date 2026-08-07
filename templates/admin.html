@@ -40,7 +40,7 @@
               {% endif %}
             </td>
             <td data-label="Actions">
-              <button class="button small" onclick="openEditModal({id: {{user.id}}, username: '{{user.username}}', fname: '{{user.fname}}', lname: '{{user.lname}}', is_admin: {{user.is_admin|lower}}})">Edit</button>
+              <button class="button small" onclick="openEditModal({{user.id}})">Edit</button>
               <button class="button small alert" onclick="deleteUser({{user.id}})">Delete</button>
             </td>
           </tr>
@@ -72,5 +72,6 @@
 {% endblock %}
 
 {% block script %}
+<script>var adminUsers = {{ users | tojson }};</script>
 <script src="{{ url_for('static', filename = 'js/admin.js') }}"></script>
 {% endblock %}

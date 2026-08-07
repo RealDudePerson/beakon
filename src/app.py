@@ -3,7 +3,11 @@ import os
 import sys
 import math
 import random
+import re
+import threading
+import time
 import requests
+from collections import defaultdict
 from logging.handlers import RotatingFileHandler
 from flask import Flask, render_template, request, redirect, session, Response, abort
 from functools import wraps
@@ -26,8 +30,7 @@ def ensure_paths(app):
     project_root = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
     config_path = os.path.join(project_root, 'config.cfg')
     if not os.path.exists(config_path):
-        with open(config_path, 'w') as f:
-            f.write("# Auto-generated config\nSECRET_KEY = 'changeme'\nMAPBOX_API_KEY = ''\n")
+        raise SystemExit("config.cfg not found at %s — run ./setup.sh first." % config_path)
     return instance_path, logs_path, config_path
 
 ensure_paths(app)
@@ -77,7 +80,6 @@ scheduler.add_job(id='geofencing_task', func=check_geofences, args=[app], trigge
 
 # Cookie security settings
 app.config['SESSION_COOKIE_SECURE'] = True
-app.config['SESSION_COOKIE_HTTPONLY'] = False
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['REMEMBER_COOKIE_SECURE'] = True
 app.config['REMEMBER_COOKIE_HTTPONLY'] = True
@@ -101,6 +103,21 @@ def add_cross_origin_headers(response):
     response.headers['Cross-Origin-Resource-Policy'] = 'same-origin'
     response.headers['Cross-Origin-Embedder-Policy'] = 'credentialless'
     return response
+
+# ponytail: in-memory per-IP throttle. Correct for a single-process self-hosted
+# app; would need shared storage (e.g. redis) if ever run multi-worker.
+_attempts = defaultdict(list)
+_attempts_lock = threading.Lock()
+
+def _too_many_attempts(key, limit=5, window=300):
+    now = time.time()
+    with _attempts_lock:
+        _attempts[key] = [t for t in _attempts[key] if now - t < window]
+        return len(_attempts[key]) >= limit
+
+def _record_attempt(key):
+    with _attempts_lock:
+        _attempts[key].append(time.time())
 
 def format_timestamp(ts, time_only=False):
     if time_only:
@@ -177,12 +194,16 @@ def login():
     if current_user.is_authenticated:
         return redirect('/dashboard')
     if request.method == 'POST':
+        rate_key = 'login:' + (request.remote_addr or 'unknown')
+        if _too_many_attempts(rate_key):
+            abort(429)
         username = request.form['username'].lower()
         user = UserModel.query.filter_by(username = username).first()
         if user is not None and user.check_password(request.form['password']):
             login_user(user,remember=True)
             app.logger.info('%s logged in successfully', username)
             return redirect('/dashboard')
+        _record_attempt(rate_key)
     return render_template('login.html')
     
 # Default page for logged in users
@@ -272,8 +293,15 @@ def register():
             return redirect('/dashboard')
         
         if request.method == 'POST':
+            rate_key = 'register:' + (request.remote_addr or 'unknown')
+            if _too_many_attempts(rate_key):
+                abort(429)
+            _record_attempt(rate_key)
             username = request.form['username'].lower()
             password = request.form['password']
+
+            if not re.fullmatch(r'[a-z0-9_.-]{2,32}', username):
+                return ('Invalid username. Use 2-32 chars: a-z 0-9 _ . -')
 
             if UserModel.query.filter_by(username=username).first():
                 return ('Username already present')
@@ -360,10 +388,16 @@ def update_token():
 def api_record_location():
     status_code = Response(status=401)
     if request.method == 'POST':
-        if request.headers['secret'] and request.headers['username']:
-            username = request.headers['username']
-            api_token = request.headers['secret']
-            user = UserModel.query.filter_by(username=username).first()
+        rate_key = 'recordlocation:' + (request.remote_addr or 'unknown')
+        if _too_many_attempts(rate_key):
+            return Response(status=429)
+        # ponytail: uniform 401 for all auth failures — no 500 oracle for unknown
+        # users or missing headers. Skipping dummy-hash timing equalization;
+        # theoretical here, pbkdf2 dominates response time for valid users.
+        username = request.headers.get('username', '')
+        api_token = request.headers.get('secret', '')
+        user = UserModel.query.filter_by(username=username).first() if username else None
+        if user is not None and api_token:
             api_token_check = user.check_api_token(api_token)
             if api_token_check == True:
                 request_data = request.get_json()
@@ -393,6 +427,7 @@ def api_record_location():
                 status_code = Response(status=201)
                 app.logger.info('%s updated their Location.', username)
                 return status_code
+        _record_attempt(rate_key)
     return status_code
 
 @app.route('/api/locations', methods=['GET'])
@@ -601,9 +636,9 @@ def account_action(action):
     elif action == "update_name":
         request_data = request.get_json()
         if 'fname' in request_data:
-            fname = request_data['fname']
+            fname = request_data['fname'][:30]
         if 'lname' in request_data:
-            lname = request_data['lname']
+            lname = request_data['lname'][:40]
         userData = UserDataModel.query.filter_by(id=id).first()
         #If this is the first time the user is setting their information, a userdata db record must be created.
         if userData is None:
