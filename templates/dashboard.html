@@ -16,18 +16,18 @@
 </div>
 <div class="grid-x grid-padding-x">
   <div class="large-9 medium-9 cell">
-    <h5>Map {% if fname != Null %} of {{fname}} {{lname}} {% endif %}</h5>
+    <h5>Map {% if fname %} of {{fname}} {{lname}} {% endif %}</h5>
     <div class="grid-x grid-padding-x">
       <div class="large-12 cell">
         <div style="margin-bottom: 10px;">
           <input type="text" id="date-picker" placeholder="Select date to view path">
         </div>
-        {% if lat != Null %}
+        {% if lat is defined %}
         <div class="responsive-embed">
           <div id="map"></div>
         </div>
         {% else %}
-            You will see a map here once you have a <a href="{{url_for('record_location')}}"">location recorded</a>.
+            You will see a map here once you have a <a href="{{url_for('record_location')}}">location recorded</a>.
         {% endif %}
         <hr />
       </div>
@@ -38,12 +38,12 @@
 
   <div class="large-3 medium-3 cell">
       <h5>Stats</h5>
-      {% if fname != Null %}
+      {% if fname %}
       <h6>{{fname}} {{lname}}</h6>
       {% else %}
-      <h6>Update your name from the <a href="{{url_for('update_info')}}">Account</a> page</h6>
+      <h6>Update your name from the <a href="{{url_for('account')}}">Account</a> page</h6>
       {% endif %}
-      {% if lat != Null %}
+      {% if lat is defined %}
       <div class="callout">
       <ul id="stats-panel">
           <li>Last updated: <span id="stat-timestamp">{{ timestamp }}</span></li>
@@ -84,7 +84,7 @@
 </div>
 {% endblock %}
 {% block script %}
-{% if lat != Null %}
+{% if lat is defined %}
     <script>
         var map = L.map('map').setView([{{lat}}, {{lon}}], 13);
         L.tileLayer('https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={{mapboxapi}}', {

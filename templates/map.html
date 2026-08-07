@@ -10,13 +10,13 @@
 {% block content %}
 <div class="grid-x grid-padding-x">
   <div class="large-9 medium-9 cell">
-    <h5>Map {% if fname != Null %} of {{fname}} {{lname}} {% endif %}</h5>
+    <h5>Map {% if fname %} of {{fname}} {{lname}} {% endif %}</h5>
     <div class="grid-x grid-padding-x">
       <div class="large-12 cell">
         <div style="margin-bottom: 10px;">
           <input type="text" id="date-picker" placeholder="Select date to view path">
         </div>
-        {% if lat != Null %}
+        {% if lat is defined %}
         <div class="responsive-embed">
           <div id="map"></div>
         </div>
@@ -33,32 +33,24 @@
   <div class="large-3 medium-3 cell">
       <h5>Stats</h5>
       <h6>{{fname}} {{lname}}</h6>
-      {% if lat != Null %}
+      {% if lat is defined %}
       <div class="callout">
       <ul id="stats-panel">
           <li>Last updated: <span id="stat-timestamp">{{ timestamp }}</span></li>
           <li>Lat: <span id="stat-lat">{{ lat }}</span></li>
           <li>Lon: <span id="stat-lon">{{ lon }}</span></li>
           <li><a id="stat-gmap" href="https://maps.google.com/?q={{lat}},{{lon}}">Google Map Location</a></li>
-          {% if batt != Null %}
+          {% if batt is defined and batt is not none %}
           <li>Battery: <span id="stat-batt">{{ batt }}</span>{% if ischarging == true %}⚡{% endif %}%
           {% endif %}
       </ul>
       </div>
       {% endif %}
-      <br>
-      {% if sharing_permission_list != Null %}
-      <div class="callout">
-        <h5>View Locations</h5>
-            {%for i in range(0,sharing_permission_count)%}
-            <a href="#" class="success button">View {{ sharing_permission_list[i]}}</a><br>
-            {%endfor%}
-      {% endif %}
   </div>
 </div>
 {% endblock %}
 {% block script %}
-{% if lat != Null %}
+{% if lat is defined %}
     <script>
         var map = L.map('map').setView([{{lat}}, {{lon}}], 13);
         L.tileLayer('https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={{mapboxapi}}', {

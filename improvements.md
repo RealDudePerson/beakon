@@ -52,57 +52,57 @@ All state-changing routes rely on the session cookie with no CSRF token (no Flas
 
 ### BUG-1 — `admin_reset_token` discards the new token
 `src/app.py:803-813`. Generates `secrets.token_hex(16)`, stores only the hash, returns bare 200. The plaintext is never shown to anyone — the old token dies and the new one is unrecoverable. The feature cannot work as built.
-**Fix:** return the plaintext once in the JSON response and display it in `admin.js`.
+**Fix:** return the plaintext once in the JSON response and display it in `admin.js`. **Status: fixed.**
 
 ### BUG-2 — `admin_update_user` strips admin when `is_admin` is omitted
 `src/app.py:799` — `user_data.is_admin = data.get('is_admin', False)`. Compare to fname/lname on the lines above, which correctly default to the current value. Any API caller that omits the field silently demotes an admin. (Current `admin.js` always sends it, so this is latent.)
-**Fix:** `data.get('is_admin', user_data.is_admin)`.
+**Fix:** `data.get('is_admin', user_data.is_admin)`. **Status: fixed.**
 
 ### BUG-3 — `setup.sh` database-init block is broken (and redundant)
 `setup.sh:165-169`: unquoted `src` in the Python `-c` string (NameError), nested double quotes in `print("...")` terminate the shell string early, a stray `"` on line 167, errors swallowed by `2>/dev/null`, and "Database initialized" printed twice. Harmless today only because `src/app.py:67-69` runs `db.create_all()` at startup.
-**Fix:** delete the block. The app self-initializes.
+**Fix:** delete the block. The app self-initializes. **Status: fixed (block rewritten with correct quoting instead of deleted, so setup still pre-creates the DB before seeding).**
 
 ### BUG-4 — Jinja `!= Null` cargo cult, plus two latent 500s
 `Null` is not a Jinja construct — it's an undefined name, so every `{% if x != Null %}` compares against `Undefined` and works only by accident. Sites: `dashboard.html:19,25,41,46,87`, `map.html:13,19,36,43,50,61`, `account.html:217`. Two landmines currently masked by this:
 - `dashboard.html:44` references `url_for('update_info')` — that endpoint **does not exist** (the route is `/account`). If that branch ever renders → `BuildError` → 500.
 - `map.html:50` uses `sharing_permission_list`, which the `/map/<username>` route never passes — hidden today because `Undefined != Undefined` is False.
 Also `account.html:217`: `sharing_permission_list` is `[]` when empty → `[] != Null` is True → "Location Shared With" heading renders over an empty list.
-**Fix:** replace with `is not none` / truthiness; point the link at `url_for('account')`; delete or fix the dead map.html block.
+**Fix:** replace with `is not none` / truthiness; point the link at `url_for('account')`; delete or fix the dead map.html block. **Status: fixed (dead map.html block deleted; used `is defined` / truthiness).**
 
 ### BUG-5 — `ischarging` never true for JSON clients
 `src/app.py:379` — `request_data['ischarging'] in ['true','True']` only matches strings. A well-behaved JSON client sending `"ischarging": true` (boolean) gets `False`. Only string senders (GPSLogger's `%CHARGING%`) work.
-**Fix:** accept both, e.g. `str(request_data.get('ischarging', '')).lower() == 'true' or request_data.get('ischarging') is True`.
+**Fix:** accept both, e.g. `str(request_data.get('ischarging', '')).lower() == 'true' or request_data.get('ischarging') is True`. **Status: fixed (accepts `True`, `'true'`, `'True'`).**
 
 ### BUG-6 — Duplicate `loadPlaces()`; the dead copy has broken string concat
 `static/js/account.js:162-187` and `276-302`. The second definition wins; the first is dead code. The dead copy's `editPlace` row HTML is also malformed (drops the closing `\'` after `webhook_url.replace(...)`, ~line 180).
-**Fix:** delete the first definition.
+**Fix:** delete the first definition. **Status: fixed.**
 
 ### BUG-7 — `/speed` is publicly reachable
 `src/app.py:708-710` — no `@login_required`. No server data is exposed (page reads browser GPS client-side only), but it's inconsistent with every other page.
-**Fix:** add the decorator.
+**Fix:** add the decorator. **Status: fixed.**
 
 ### BUG-8 — `record_location` POST returns a full HTML page
 `src/app.py:329` — returns `render_template('recordlocation.html')` on POST. Callers (dashboard tracking loop, every 10 s) ignore the body. Wasteful and confusing.
-**Fix:** return `Response(status=201)`.
+**Fix:** return `Response(status=201)`. **Status: fixed.**
 
 ### BUG-9 — Missing input validation → 500s instead of 400s
 - `/api/recordlocation`: `request_data['lat']` etc. → `KeyError` on missing keys (`src/app.py:370-372`).
 - `/api/places` POST: `data['name']`, `data['lat']`... same (`src/app.py:486`); no range checks (negative radius never fires; SQLite ignores `VARCHAR(100)` so `name` is unbounded).
 - `get_locations_for_date`: bad `date` param → `ValueError` → 500 (`src/app.py:135`).
 - `/login`, `/register`: missing form fields → `KeyError`.
-**Fix:** validate and return 400 with a message. Small helper or per-route `.get()` + presence checks.
+**Fix:** validate and return 400 with a message. Small helper or per-route `.get()` + presence checks. **Status: fixed (per-route checks; `/api/places` POST also gets type coercion, lat/lon range checks, name truncation, radius clamp).**
 
 ### BUG-10 — Version badge never renders
 `templates/layout.html:30` — `{{ VERSION }}`. Config values are not template globals and no context processor injects it, so it's always `Undefined` and the badge is permanently hidden. The "version display" feature is dead.
-**Fix:** add `VERSION` to the existing `inject_admin_status` context processor (rename it), or use `{{ config.VERSION }}`.
+**Fix:** add `VERSION` to the existing `inject_admin_status` context processor (rename it), or use `{{ config.VERSION }}`. **Status: fixed (used `config.VERSION`).**
 
 ### BUG-11 — Dead `app.logger_name` assignment
 `src/app.py:36` — setting `app.logger_name = "WEBSRVR"` after app creation does nothing; logs still show `app`.
-**Fix:** delete the line.
+**Fix:** delete the line. **Status: fixed.**
 
 ### BUG-12 — Admin self-delete / last-admin delete unguarded
 `src/app.py:815-824` — an admin can delete their own account mid-session, and can delete the last remaining admin, permanently locking the admin panel (no admin → no way to promote anyone without DB surgery).
-**Fix:** refuse self-delete and refuse deleting the last admin.
+**Fix:** refuse self-delete and refuse deleting the last admin. **Status: fixed.**
 
 ### BUG-13 — Template nits
 - `login.html:4` — `</buttonn>` typo.
@@ -110,6 +110,8 @@ Also `account.html:217`: `sharing_permission_list` is `[]` when empty → `[] !=
 - `registration_closed.html:2` — title block says "Dashboard".
 - `map.html:54` — "View" buttons are `href="#"` dead links.
 - `recordlocation.html:66` — `watchPosition` with no throttle floods `/recordlocation` on every GPS tick (the dashboard tracking loop throttles to 10 s; this page doesn't).
+
+**Status (BUG-13): fixed** — `</buttonn>`, stray quote, and title corrected; dead map.html buttons removed with the BUG-4 block; recordlocation.html now throttles to one POST per 10 s.
 
 ---
 

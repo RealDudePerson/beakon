@@ -159,33 +159,6 @@ deleteLocationButton.addEventListener('click', function(){
 var editingPlaceId = null;
 var modalMode = 'add'; // 'add', 'edit', 'view'
 
-function loadPlaces() {
-    fetch('/api/places')
-        .then(function(res) { return res.json(); })
-        .then(function(data) {
-            var tbody = document.querySelector('#places-table tbody');
-            tbody.innerHTML = '';
-            data.places.forEach(function(place) {
-                var truncWebhook = place.webhook_url.length > 30 ? place.webhook_url.substring(0, 30) + '...' : place.webhook_url;
-                var enabledBtnClass = place.enabled ? 'success' : 'secondary';
-                var enabledBtnText = place.enabled ? 'On' : 'Off';
-                var row = '<tr>' +
-                    '<td data-label="Name">' + place.name + '</td>' +
-                    '<td data-label="Coordinates" class="show-for-medium">' + place.lat.toFixed(5) + ', ' + place.lon.toFixed(5) + '</td>' +
-                    '<td data-label="Radius">' + place.radius + '</td>' +
-                    '<td data-label="Webhook" class="show-for-medium" title="' + place.webhook_url + '">' + truncWebhook + '</td>' +
-                    '<td data-label="Enabled"><button class="button small ' + enabledBtnClass + '" onclick="togglePlace(' + place.id + ', ' + place.enabled + ')">' + enabledBtnText + '</button></td>' +
-                    '<td data-label="Actions">' +
-                        '<button class="button small" onclick="viewPlace(' + place.id + ', ' + place.lat + ', ' + place.lon + ', \'' + place.name.replace(/'/g, "\\'") + '\')">View</button> ' +
-                        '<button class="button small warning" onclick="editPlace(' + place.id + ', \'' + place.name.replace(/'/g, "\\'") + '\', ' + place.lat + ', ' + place.lon + ', ' + place.radius + ', \'' + place.webhook_url.replace(/'/g, "\\'") + '\', ' + place.enabled + ')">Edit</button> ' +
-                        '<button class="button small alert" onclick="deletePlace(' + place.id + ')">Delete</button>' +
-                    '</td>' +
-                '</tr>';
-                tbody.innerHTML += row;
-            });
-        });
-}
-
 function togglePlace(id, currentEnabled) {
     fetch('/api/places', {
         method: 'PUT',

@@ -27,8 +27,9 @@ function saveUser() {
 function resetToken(id) {
     if(confirm('Are you sure you want to reset this user\'s API token?')) {
         fetch('/admin/users/' + id + '/reset-token', { method: 'POST' })
-        .then(res => {
-            if(res.ok) location.reload();
+        .then(res => res.json())
+        .then(data => {
+            if(data.token) alert('New API token (shown once, store it now): ' + data.token);
             else alert('Error resetting token');
         });
     }

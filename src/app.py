@@ -36,7 +36,6 @@ def ensure_paths(app):
 ensure_paths(app)
 
 # Set up logging to instance/logs/
-app.logger_name = "WEBSRVR"
 logs_path = os.path.join(app.instance_path, 'logs')
 file_handler = RotatingFileHandler(os.path.join(logs_path, 'beakon.log'), 'a', 1 * 1024 * 1024, 10)
 file_handler.setLevel(logging.DEBUG)
@@ -149,7 +148,10 @@ def get_filtered_locations(userid, max_locations=10, min_distance_meters=91):
     return filtered
 
 def get_locations_for_date(userid, date_str):
-    date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
+    try:
+        date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        abort(400)
     start_of_day = datetime.combine(date_obj, datetime.min.time())
     end_of_day = datetime.combine(date_obj, datetime.max.time())
     return LocationsModel.query.filter(
@@ -334,10 +336,12 @@ def register():
 @login_required
 def record_location():
     if request.method == 'POST':
-        request_data = request.get_json()
+        request_data = request.get_json(silent=True) or {}
+        if 'lat' not in request_data or 'lon' not in request_data:
+            return Response(status=400)
         lat = request_data['lat']
         lon = request_data['lon']
-        acc = request_data['acc']
+        acc = request_data.get('acc')
         location = LocationsModel()
         location.set_lat(lat)
         location.set_lon(lon)
@@ -354,7 +358,7 @@ def record_location():
         
         db.session.add(location)
         db.session.commit()
-        return render_template('recordlocation.html')
+        return Response(status=201)
     return render_template('recordlocation.html')
 
 # Used to set the API token
@@ -400,17 +404,19 @@ def api_record_location():
         if user is not None and api_token:
             api_token_check = user.check_api_token(api_token)
             if api_token_check == True:
-                request_data = request.get_json()
+                request_data = request.get_json(silent=True) or {}
+                if 'lat' not in request_data or 'lon' not in request_data:
+                    return Response(status=400)
                 lat = request_data['lat']
                 lon = request_data['lon']
-                acc = request_data['acc']
+                acc = request_data.get('acc')
                 batt = False
                 if 'batt' in request_data:
                     batt = request_data['batt']
                     app.logger.debug('batt is %s', batt)
                 ischarging = False
                 if 'ischarging' in request_data:
-                    ischarging = request_data['ischarging'] in ['true','True']
+                    ischarging = request_data['ischarging'] in [True, 'true', 'True']
                     app.logger.debug('ischarging is %s', ischarging)
                 location = LocationsModel()
                 location.set_lat(lat)
@@ -517,14 +523,24 @@ def api_places():
         places = KnownPlaceModel.query.filter_by(userid=id).all()
         return {'places': [{'id': p.id, 'name': p.name, 'lat': p.lat, 'lon': p.lon, 'radius': p.radius, 'webhook_url': p.webhook_url, 'enabled': p.enabled, 'include_coords_in_webhook': p.include_coords_in_webhook} for p in places]}
     elif request.method == 'POST':
-        data = request.get_json()
-        place = KnownPlaceModel(userid=id, name=data['name'], lat=data['lat'], lon=data['lon'], radius=data.get('radius', 100), webhook_url=data['webhook_url'], enabled=data.get('enabled', True), include_coords_in_webhook=data.get('include_coords_in_webhook', False))
+        data = request.get_json(silent=True) or {}
+        try:
+            name = data['name'][:100]
+            lat = float(data['lat'])
+            lon = float(data['lon'])
+            webhook_url = data['webhook_url']
+            radius = max(1, int(data.get('radius') or 100))
+        except (KeyError, TypeError, ValueError):
+            return Response(status=400)
+        if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
+            return Response(status=400)
+        place = KnownPlaceModel(userid=id, name=name, lat=lat, lon=lon, radius=radius, webhook_url=webhook_url, enabled=data.get('enabled', True), include_coords_in_webhook=data.get('include_coords_in_webhook', False))
         db.session.add(place)
         db.session.commit()
         return Response(status=201)
     elif request.method == 'PUT':
-        data = request.get_json()
-        place = KnownPlaceModel.query.filter_by(id=data['id'], userid=id).first()
+        data = request.get_json(silent=True) or {}
+        place = KnownPlaceModel.query.filter_by(id=data.get('id'), userid=id).first()
         if not place:
             return Response(status=404)
         if 'name' in data: place.name = data['name']
@@ -537,8 +553,8 @@ def api_places():
         db.session.commit()
         return Response(status=200)
     elif request.method == 'DELETE':
-        data = request.get_json()
-        KnownPlaceModel.query.filter_by(id=data['id'], userid=id).delete()
+        data = request.get_json(silent=True) or {}
+        KnownPlaceModel.query.filter_by(id=data.get('id'), userid=id).delete()
         db.session.commit()
         return Response(status=200)
     return Response(status=405)
@@ -741,6 +757,7 @@ def map(map_username):
         return redirect('/dashboard')
 
 @app.route('/speed')
+@login_required
 def speed():
     return render_template('speed.html')
 
@@ -831,7 +848,7 @@ def admin_update_user(user_id):
         
     user_data.fname = data.get('fname', user_data.fname)
     user_data.lname = data.get('lname', user_data.lname)
-    user_data.is_admin = data.get('is_admin', False)
+    user_data.is_admin = data.get('is_admin', user_data.is_admin)
     db.session.commit()
     return Response(status=200)
 
@@ -843,9 +860,10 @@ def admin_reset_token(user_id):
     if not user:
         return {'error': 'User not found'}, 404
     import secrets
-    user.set_api_token(secrets.token_hex(16))
+    new_token = secrets.token_hex(16)
+    user.set_api_token(new_token)
     db.session.commit()
-    return Response(status=200)
+    return {'token': new_token}, 200
 
 @app.route('/admin/users/<int:user_id>/delete', methods=['POST'])
 @login_required
@@ -854,6 +872,11 @@ def admin_delete_user(user_id):
     user = UserModel.query.get(user_id)
     if not user:
         return {'error': 'User not found'}, 404
+    if int(current_user.get_id()) == user_id:
+        return {'error': 'Cannot delete your own account'}, 400
+    target_data = UserDataModel.query.filter_by(id=user_id).first()
+    if target_data and target_data.is_admin and UserDataModel.query.filter_by(is_admin=True).count() <= 1:
+        return {'error': 'Cannot delete the last admin'}, 400
     db.session.delete(user)
     db.session.commit()
     return Response(status=200)

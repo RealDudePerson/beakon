@@ -22,7 +22,11 @@
 {% endblock %}
 {% block script %}
     <script>
+        let lastSent = 0;
         function locationSuccess(position) {
+            const now = Date.now();
+            if (now - lastSent < 10000) return; // throttle: one POST per 10s
+            lastSent = now;
             const latitude = position.coords.latitude;
             console.log(latitude);
             const longitude = position.coords.longitude;

@@ -162,10 +162,14 @@ print_success "Configuration saved to config.cfg"
 print_header "Database Setup"
 
 print_info "Initializing database..."
-$PYTHON -c "import sys; sys.path.insert(0, src); from app import app, db; from models import UserModel, LocationsModel, UserDataModel, SharingPermissionModel, KnownPlaceModel; with app.app_context(): db.create_all(); print("Database initialized successfully")" 2>/dev/null
-print_success "Database initialized"
+$PYTHON -c "
+import sys
+sys.path.insert(0, 'src')
+from app import app, db
+import models
+with app.app_context():
+    db.create_all()
 "
-
 print_success "Database initialized"
 
 print_header "Test Data (Optional)"
