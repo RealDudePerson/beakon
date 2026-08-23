@@ -881,5 +881,74 @@ def admin_delete_user(user_id):
     db.session.commit()
     return Response(status=200)
 
+# Presence search: "when was this person within radius R of point P recently?"
+# Returns the 10 most recent calendar days on which the person logged at least one
+# location inside the circle, however far back that spans. Streaming DESC with early
+# exit at 10 hit-days; worst case reads the user's whole history once.
+PRESENCE_DAYS = 10
+
+@app.route('/presence')
+@login_required
+def presence():
+    id = current_user.get_id()
+    shared = SharingPermissionModel.query.filter_by(shared_with_id=id).all()
+    usernames = [s.get_data_owner_username() for s in shared]
+    return render_template('presence.html',
+                           mapboxapi=app.config['MAPBOX_API_KEY'],
+                           usernames=usernames,
+                           username=current_user.get_username())
+
+@app.route('/api/presence')
+@login_required
+def api_presence():
+    id = current_user.get_id()
+    username = request.args.get('user') or current_user.get_username()
+    try:
+        lat = float(request.args.get('lat', ''))
+        lon = float(request.args.get('lon', ''))
+        radius = max(1, int(request.args.get('radius', '100')))
+    except (TypeError, ValueError):
+        return Response(status=400)
+    if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
+        return Response(status=400)
+
+    map_user = UserModel.query.filter_by(username=username).first()
+    if map_user is None:
+        return {'error': 'User not found'}, 404
+    if map_user.get_id() != id:
+        has_permission = SharingPermissionModel.query.filter_by(
+            data_owner_id=map_user.get_id(), shared_with_id=id
+        ).first()
+        if has_permission is None:
+            return {'error': 'Permission denied'}, 403
+
+    days = {}
+    for loc in (LocationsModel.query
+                .filter_by(userid=map_user.get_id())
+                .order_by(LocationsModel.timestamp.desc())
+                .yield_per(100)):
+        if loc.lat is None or loc.lon is None:
+            continue
+        if haversine_meters(lat, lon, loc.lat, loc.lon) >= radius:
+            continue
+        day = loc.timestamp.date()
+        if day not in days:
+            if len(days) >= PRESENCE_DAYS:
+                break
+            days[day] = {'date': day.isoformat(), 'hits': 0,
+                         'first': loc.timestamp, 'last': loc.timestamp,
+                         'last_lat': loc.lat, 'last_lon': loc.lon}
+        entry = days[day]
+        entry['hits'] += 1
+        entry['first'] = min(entry['first'], loc.timestamp)
+        entry['last'] = max(entry['last'], loc.timestamp)
+
+    result = [{'date': e['date'], 'hits': e['hits'],
+               'first': e['first'].strftime('%Y-%m-%d %H:%M:%S'),
+               'last': e['last'].strftime('%Y-%m-%d %H:%M:%S'),
+               'last_lat': e['last_lat'], 'last_lon': e['last_lon']}
+              for e in days.values()]
+    return {'user': username, 'lat': lat, 'lon': lon, 'radius': radius, 'days': result}
+
 if __name__ == '__main__':
     app.run(ssl_context="adhoc",host='0.0.0.0')

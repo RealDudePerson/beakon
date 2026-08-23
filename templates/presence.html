@@ -1,0 +1,99 @@
+{% extends "layout.html" %}
+{% block title %}Presence Search{% endblock %}
+{% block top_menu_buttons %}
+                        <li><a href="{{url_for('dashboard')}}">Dashboard</a></li>
+                        <li><a href="{{url_for('speed')}}">Speed</a></li>
+                        <li><a href="{{url_for('presence')}}">Presence</a></li>
+                        {% if current_user.is_authenticated and is_admin %}
+                        <li><a href="{{url_for('admin_dashboard')}}">Admin</a></li>
+                        {% endif %}
+                        <li><a href="{{ url_for('logout') }}"><button type="button" class="button topbar-responsive-button">Logout</button></a></li>
+{% endblock %}
+{% block content %}
+<div class="grid-x grid-padding-x">
+  <div class="large-9 cell">
+    <h5>Click the map to pick a search point.</h5>
+    <div id="map" style="height: 500px;"></div>
+  </div>
+  <div class="large-3 cell">
+    <h5>Search</h5>
+    <label>Radius (meters)
+      <input type="number" id="presence-radius" value="100" min="1">
+    </label>
+    <label>User
+      <select id="presence-user">
+        <option value="{{ username }}">{{ username }} (you)</option>
+        {% for u in usernames %}
+        <option value="{{ u }}">{{ u }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button class="button" id="presence-search-btn">Search</button>
+    <hr>
+    <div id="presence-results"></div>
+  </div>
+</div>
+{% endblock %}
+{% block script %}
+<script>
+var mapboxToken = '{{mapboxapi}}';
+var map = L.map('map').setView([0, 0], 2);
+L.tileLayer('https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token=' + mapboxToken, {
+    attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Imagery &copy; <a href="https://www.mapbox.com/">Mapbox</a>',
+    maxZoom: 18,
+    id: 'mapbox/streets-v11',
+    tileSize: 512,
+    zoomOffset: -1,
+    accessToken: mapboxToken
+}).addTo(map);
+
+var searchMarker = null;
+var searchCircle = null;
+var resultsLayer = L.layerGroup().addTo(map);
+
+function redraw() {
+    if (!searchMarker) return;
+    var radius = parseInt(document.getElementById('presence-radius').value) || 100;
+    var pos = searchMarker.getLatLng();
+    if (searchCircle) map.removeLayer(searchCircle);
+    searchCircle = L.circle(pos, {radius: radius, color: 'blue', fillColor: '#3388ff', fillOpacity: 0.2}).addTo(map);
+}
+
+map.on('click', function(e) {
+    if (searchMarker) map.removeLayer(searchMarker);
+    searchMarker = L.marker(e.latlng).addTo(map);
+    redraw();
+});
+
+document.getElementById('presence-radius').addEventListener('input', redraw);
+
+document.getElementById('presence-search-btn').addEventListener('click', function() {
+    if (!searchMarker) { alert('Click the map to pick a search point.'); return; }
+    resultsLayer.clearLayers();
+    document.getElementById('presence-results').innerHTML = '';
+    var params = new URLSearchParams({
+        user: document.getElementById('presence-user').value,
+        lat: searchMarker.getLatLng().lat,
+        lon: searchMarker.getLatLng().lng,
+        radius: document.getElementById('presence-radius').value
+    });
+    fetch('/api/presence?' + params.toString())
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.error) { alert(data.error); return; }
+            var html = '<h6>' + data.days.length + ' day(s) with hits</h6><ul>';
+            data.days.forEach(function(d) {
+                html += '<li><b>' + d.date + '</b>: ' + d.hits + ' hits (' + d.first + ' &rarr; ' + d.last + ')</li>';
+            });
+            html += '</ul>';
+            document.getElementById('presence-results').innerHTML = html;
+            data.days.forEach(function(d) {
+                var m = L.marker([d.last_lat, d.last_lon]).addTo(resultsLayer);
+                m.bindPopup('<b>' + d.date + '</b><br>' + d.hits + ' hits<br>' + d.first + ' &rarr; ' + d.last);
+            });
+            if (data.days.length === 0) { alert('No hits inside the circle in recent history.'); }
+        })
+        .catch(function(e) { alert('Error: ' + e); });
+});
+</script>
+{% endblock %}
