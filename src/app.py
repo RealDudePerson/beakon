@@ -182,6 +182,16 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+# API login decorator: returns JSON 401 instead of redirecting to /login,
+# so fetch()-based callers can parse the error instead of choking on HTML.
+def _api_login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return {'error': 'Not authenticated'}, 401
+        return f(*args, **kwargs)
+    return decorated
+
 # App routes
 @app.route('/')
 def index():
@@ -437,7 +447,7 @@ def api_record_location():
     return status_code
 
 @app.route('/api/locations', methods=['GET'])
-@login_required
+@_api_login_required
 def api_get_locations():
     id = current_user.get_id()
     username = UserModel.query.filter_by(id=id).first().get_username()
@@ -472,7 +482,7 @@ def api_get_locations():
     return {'locations': [], 'latest': None}
 
 @app.route('/api/locations/<map_username>', methods=['GET'])
-@login_required
+@_api_login_required
 def api_get_user_locations(map_username):
     id = current_user.get_id()
     username = UserModel.query.filter_by(id=id).first().get_username()
@@ -516,7 +526,7 @@ def api_get_user_locations(map_username):
 
 # Known Places API
 @app.route('/api/places', methods=['GET', 'POST', 'PUT', 'DELETE'])
-@login_required
+@_api_login_required
 def api_places():
     id = current_user.get_id()
     if request.method == 'GET':
@@ -560,7 +570,7 @@ def api_places():
     return Response(status=405)
 
 @app.route('/api/places/<int:place_id>/test', methods=['POST'])
-@login_required
+@_api_login_required
 def api_test_place(place_id):
     id = current_user.get_id()
     place = KnownPlaceModel.query.filter_by(id=place_id, userid=id).first()
@@ -899,7 +909,7 @@ def presence():
                            username=current_user.get_username())
 
 @app.route('/api/presence')
-@login_required
+@_api_login_required
 def api_presence():
     id = current_user.get_id()
     username = request.args.get('user') or current_user.get_username()

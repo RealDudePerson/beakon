@@ -78,7 +78,14 @@ document.getElementById('presence-search-btn').addEventListener('click', functio
         radius: document.getElementById('presence-radius').value
     });
     fetch('/api/presence?' + params.toString())
-        .then(function(r) { return r.json(); })
+        .then(function(r) {
+            if (!r.ok) {
+                return r.text().then(function(body) {
+                    throw new Error('Server returned HTTP ' + r.status + (body ? ' (' + body.substring(0, 120) + ')' : ''));
+                });
+            }
+            return r.json();
+        })
         .then(function(data) {
             if (data.error) { alert(data.error); return; }
             var html = '<h6>' + data.days.length + ' day(s) with hits</h6><ul>';
@@ -93,7 +100,7 @@ document.getElementById('presence-search-btn').addEventListener('click', functio
             });
             if (data.days.length === 0) { alert('No hits inside the circle in recent history.'); }
         })
-        .catch(function(e) { alert('Error: ' + e); });
+        .catch(function(e) { alert('Error: ' + (e && e.message ? e.message : e)); });
 });
 </script>
 {% endblock %}
