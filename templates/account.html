@@ -241,10 +241,14 @@
     function initPlaceMap() {
         if (!mapInitialized) {
             placeMap = L.map('place-map').setView([0,0], 2);
+            {% if mapboxapi %}
             L.tileLayer('https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token=' + mapboxToken, {
                 id: 'mapbox/streets-v11',
                 accessToken: mapboxToken
             }).addTo(placeMap);
+            {% else %}
+            beakonMapUnavailable(placeMap);
+            {% endif %}
 
             placeMap.on('click', function(e) {
                 if (modalMode === 'view') return;
