@@ -21,14 +21,19 @@ from geofencing import check_geofences, haversine_meters
 # Define app
 app = Flask(__name__, template_folder='../templates', static_folder='../static', instance_path=os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'instance'))
 
+def _default_config_path():
+    project_root = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    # BEAKON_CONFIG lets tests (or alternate deployments) point the app at a
+    # different config file; it defaults to the project-root config.cfg.
+    return os.environ.get('BEAKON_CONFIG') or os.path.join(project_root, 'config.cfg')
+
 # Ensure instance directory and config exist before loading config
 def ensure_paths(app):
     instance_path = app.instance_path
     os.makedirs(instance_path, exist_ok=True)
     logs_path = os.path.join(instance_path, 'logs')
     os.makedirs(logs_path, exist_ok=True)
-    project_root = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-    config_path = os.path.join(project_root, 'config.cfg')
+    config_path = _default_config_path()
     if not os.path.exists(config_path):
         raise SystemExit("config.cfg not found at %s — run ./setup.sh first." % config_path)
     return instance_path, logs_path, config_path
@@ -43,22 +48,31 @@ file_handler.setFormatter(logging.Formatter('%(asctime)s [%(process)-5d:%(thread
 app.logger.addHandler(file_handler)
 app.logger.setLevel(logging.DEBUG)
 
-# Load config
-project_root = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-config_path = os.path.join(project_root, 'config.cfg')
-with open(config_path, 'r') as f:
-    for line in f:
-        line = line.strip()
-        if line and not line.startswith('#') and '=' in line:
-            key, value = line.split('=', 1)
-            key = key.strip()
-            value = value.strip().strip("'\"")
-            if key and value:
+def load_config(app, config_path):
+    """Populate ``app.config`` from a ``KEY = VALUE`` config file.
+
+    A key is applied whenever the line names a key, even when the value is an
+    empty string. An empty value is a legitimate setting (for example an unset
+    ``MAPBOX_API_KEY``) and must survive the loader; dropping it leaves later
+    subscripts to raise ``KeyError`` and turn into HTTP 500s.
+    """
+    with open(config_path, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith('#') and '=' in line:
+                key, value = line.split('=', 1)
+                key = key.strip()
+                value = value.strip().strip("'\"")
+                if not key:
+                    continue
                 if value.lower() in ('true', '1', 'yes', 'on'):
                     value = True
                 elif value.lower() in ('false', '0', 'no', 'off'):
                     value = False
                 app.config[key] = value
+
+# Load config
+load_config(app, _default_config_path())
 
 # Initiate the database and login
 db.init_app(app)
@@ -268,7 +282,7 @@ def dashboard():
         return render_template('dashboard.html',
             username=username, fname=fname, lname=lname,
             lat=lat, lon=lon, timestamp=timestamp,
-            mapboxapi=app.config['MAPBOX_API_KEY'],
+            mapboxapi=app.config.get('MAPBOX_API_KEY', ''),
             sharing_permission_list=sharing_permission_list,
             sharing_permission_count=sharing_permission_count,
             batt=batt, ischarging=ischarging,
@@ -300,7 +314,7 @@ def logout():
 # TODO: Possibly add some sort of spam prevention
 @app.route('/register', methods=['POST','GET'])
 def register():
-    if app.config['REGISTRATION_ENABLED']:
+    if app.config.get('REGISTRATION_ENABLED', False):
         if current_user.is_authenticated:
             return redirect('/dashboard')
         
@@ -617,7 +631,7 @@ def account():
     lname = UserDataModel.query.filter_by(id=id).first()
     if lname is not None:
         lname = lname.get_lname()
-    return render_template('account.html',username=username,sharing_permission_list=sharing_permission_list,sharing_permission_count=sharing_permission_count,fname=fname,lname=lname,id=id, mapboxapi=app.config['MAPBOX_API_KEY'])
+    return render_template('account.html',username=username,sharing_permission_list=sharing_permission_list,sharing_permission_count=sharing_permission_count,fname=fname,lname=lname,id=id, mapboxapi=app.config.get('MAPBOX_API_KEY', ''))
 
 # This is the logic for updating fname, lname
 # as well as setting location sharing permissions.
@@ -756,7 +770,7 @@ def map(map_username):
                 
                 return render_template('map.html',
                     fname=fname, lname=lname, lat=lat, lon=lon,
-                    timestamp=timestamp, mapboxapi=app.config['MAPBOX_API_KEY'],
+                    timestamp=timestamp, mapboxapi=app.config.get('MAPBOX_API_KEY', ''),
                     batt=batt, ischarging=ischarging, locations=locations_data,
                     map_username=map_username)
             
@@ -904,7 +918,7 @@ def presence():
     shared = SharingPermissionModel.query.filter_by(shared_with_id=id).all()
     usernames = [s.get_data_owner_username() for s in shared]
     return render_template('presence.html',
-                           mapboxapi=app.config['MAPBOX_API_KEY'],
+                           mapboxapi=app.config.get('MAPBOX_API_KEY', ''),
                            usernames=usernames,
                            username=current_user.get_username())
 
