@@ -4,6 +4,7 @@ import sys
 import math
 import random
 import re
+import ipaddress
 import threading
 import time
 import requests
@@ -169,6 +170,48 @@ def _throttled_response(retry_after, api=False):
                     % retry_after, status=429, mimetype='text/plain',
                     headers=headers)
 
+def _client_address():
+    """Return the real client address to key the throttle on (B2).
+
+    Behind a proxy on a separate host the TCP source address (``remote_addr``)
+    is the proxy for every client, which collapses the per-IP throttle into a
+    single global bucket. When the request arrives from a configured trusted
+    proxy we therefore use the last hop of ``X-Forwarded-For``: nginx appends
+    the address it actually observed with ``$proxy_add_x_forwarded_for``, so
+    the final entry is the trustworthy one and earlier entries are whatever the
+    caller sent.
+
+    ``TRUSTED_PROXY_IPS`` is a comma-separated list in ``config.cfg`` and
+    defaults to empty. When it is empty, behaviour is exactly as before: only
+    ``remote_addr`` is used. A direct (non-trusted) connection can never
+    influence the key with a header.
+
+    Fails closed: if the trusted proxy sends no usable ``X-Forwarded-For`` the
+    value falls back to ``remote_addr`` (never to an attacker-chosen address)
+    and the misconfiguration is logged.
+    """
+    remote = request.remote_addr or 'unknown'
+    raw = app.config.get('TRUSTED_PROXY_IPS') or ''
+    trusted = ({ip.strip() for ip in raw.split(',') if ip.strip()}
+               if isinstance(raw, str) else set())
+    if not trusted or request.remote_addr not in trusted:
+        return remote
+    forwarded = request.headers.get('X-Forwarded-For', '')
+    hops = [hop.strip() for hop in forwarded.split(',') if hop.strip()]
+    if not hops:
+        app.logger.warning(
+            'Trusted proxy %s sent no X-Forwarded-For; using remote_addr '
+            'for rate limiting.', remote)
+        return remote
+    candidate = hops[-1]
+    try:
+        return str(ipaddress.ip_address(candidate))
+    except ValueError:
+        app.logger.warning(
+            'Trusted proxy %s sent unparseable X-Forwarded-For %r; using '
+            'remote_addr for rate limiting.', remote, candidate)
+        return remote
+
 def _finite_float(value, field):
     """Coerce ``value`` to a finite float, else return an error naming ``field``."""
     if isinstance(value, bool):
@@ -332,7 +375,7 @@ def login():
     if current_user.is_authenticated:
         return redirect('/dashboard')
     if request.method == 'POST':
-        rate_key = 'login:' + (request.remote_addr or 'unknown')
+        rate_key = 'login:' + _client_address()
         if _too_many_attempts(rate_key):
             return _throttled_response(_retry_after_seconds(rate_key))
         username = request.form['username'].lower()
@@ -430,7 +473,7 @@ def register():
             return redirect('/dashboard')
         
         if request.method == 'POST':
-            rate_key = 'register:' + (request.remote_addr or 'unknown')
+            rate_key = 'register:' + _client_address()
             if _too_many_attempts(rate_key):
                 return _throttled_response(_retry_after_seconds(rate_key))
             _record_attempt(rate_key)
@@ -527,7 +570,7 @@ def update_token():
 def api_record_location():
     status_code = Response(status=401)
     if request.method == 'POST':
-        rate_key = 'recordlocation:' + (request.remote_addr or 'unknown')
+        rate_key = 'recordlocation:' + _client_address()
         if _too_many_attempts(rate_key):
             return _throttled_response(_retry_after_seconds(rate_key), api=True)
         # ponytail: uniform 401 for all auth failures — no 500 oracle for unknown
