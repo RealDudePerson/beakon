@@ -55,47 +55,54 @@ def check_geofences(app):
         user_map, loc_map, user_data_map = _batch_fetch_users_and_locations(places)
 
         for place in places:
-            user = user_map.get(place.userid)
-            if not user:
-                continue
-
-            latest_loc = loc_map.get(place.userid)
-            if not latest_loc or latest_loc.lat is None or latest_loc.lon is None:
-                continue
-
-            dist = haversine_meters(latest_loc.lat, latest_loc.lon, place.lat, place.lon)
-            is_inside = dist < place.radius
-
-            if is_inside == place.is_inside:
-                continue
-
-            place.is_inside = is_inside
-
-            event = "arrived" if is_inside else "left"
-            payload = {
-                "event": event,
-                "place": place.name,
-                "username": user.username,
-            }
-            if place.include_coords_in_webhook:
-                payload["lat"] = latest_loc.lat
-                payload["lon"] = latest_loc.lon
-
-            user_data = user_data_map.get(user.id)
-            if user_data:
-                payload["fname"] = user_data.fname
-                payload["lname"] = user_data.lname
-
-            now = datetime.now()
             try:
-                response = requests.post(place.webhook_url, json=payload, timeout=5)
-                place.last_webhook_time = now
-                place.last_webhook_status = "success" if response.status_code == 200 else f"error:{response.status_code}"
-            except Exception as e:
-                logging.error("Webhook failed for place %s: %s", place.name, e)
-                place.last_webhook_time = now
-                place.last_webhook_status = "failed"
+                user = user_map.get(place.userid)
+                if not user:
+                    continue
 
-            db.session.commit()
+                latest_loc = loc_map.get(place.userid)
+                if not latest_loc or latest_loc.lat is None or latest_loc.lon is None:
+                    continue
+
+                dist = haversine_meters(latest_loc.lat, latest_loc.lon, place.lat, place.lon)
+                is_inside = dist < place.radius
+
+                if is_inside == place.is_inside:
+                    continue
+
+                place.is_inside = is_inside
+
+                event = "arrived" if is_inside else "left"
+                payload = {
+                    "event": event,
+                    "place": place.name,
+                    "username": user.username,
+                }
+                if place.include_coords_in_webhook:
+                    payload["lat"] = latest_loc.lat
+                    payload["lon"] = latest_loc.lon
+
+                user_data = user_data_map.get(user.id)
+                if user_data:
+                    payload["fname"] = user_data.fname
+                    payload["lname"] = user_data.lname
+
+                now = datetime.now()
+                try:
+                    response = requests.post(place.webhook_url, json=payload, timeout=5)
+                    place.last_webhook_time = now
+                    place.last_webhook_status = "success" if response.status_code == 200 else f"error:{response.status_code}"
+                except Exception as e:
+                    logging.error("Webhook failed for place %s: %s", place.name, e)
+                    place.last_webhook_time = now
+                    place.last_webhook_status = "failed"
+
+                db.session.commit()
+            except Exception:
+                # A single malformed row (e.g. a non-numeric lat stored before
+                # validation existed) must not abort the run for every user.
+                db.session.rollback()
+                logging.exception("Skipping malformed geofence row place.id=%s", place.id)
+                continue
     finally:
         ctx.pop()

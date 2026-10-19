@@ -76,6 +76,7 @@
             {%for i in range(0,sharing_permission_count)%}
             <a href="/map/{{sharing_permission_list[i]}}" class="success button">View {{ sharing_permission_list[i]}}</a><br>
             {%endfor%}
+            Tell them to add '{{username}}' to their sharing list.
       {% else %}
       <div class="callout">
         When someone shares their location with you, a button will appear here. Tell them to add '{{username}}' to their sharing list.

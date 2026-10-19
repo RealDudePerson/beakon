@@ -29,6 +29,11 @@ class UserModel(UserMixin, db.Model):
         self.api_token_hash = generate_password_hash(api_token)
 
     def check_api_token(self,api_token):
+        # An account may legitimately have no API token yet (api_token_hash is
+        # NULL). Treat that exactly like a wrong token instead of letting
+        # check_password_hash raise AttributeError and turn into a 500.
+        if not self.api_token_hash:
+            return False
         return check_password_hash(self.api_token_hash,api_token)
 
     def get_username(self):

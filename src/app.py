@@ -74,6 +74,17 @@ def load_config(app, config_path):
 # Load config
 load_config(app, _default_config_path())
 
+# S8: reject oversized request bodies instead of buffering them. The largest
+# legitimate payload here is a small JSON location fix or known-place record (a
+# few hundred bytes), so 64 KiB leaves ~100x headroom while bounding the memory
+# a single request can consume. Overridable via config if ever needed.
+app.config['MAX_CONTENT_LENGTH'] = app.config.get('MAX_CONTENT_LENGTH') or 64 * 1024
+
+# S6: minimum length for interactive passwords (registration, password change,
+# admin-created accounts). 8 characters is the commonly recommended floor (NIST
+# SP 800-63B). It is never applied to the Android client's API secret/token.
+MIN_PASSWORD_LENGTH = 8
+
 # Initiate the database and login
 db.init_app(app)
 login.init_app(app)
@@ -117,6 +128,10 @@ def add_cross_origin_headers(response):
     response.headers['Cross-Origin-Embedder-Policy'] = 'credentialless'
     return response
 
+@app.errorhandler(413)
+def request_entity_too_large(error):
+    return {'error': 'Request body too large.'}, 413
+
 # ponytail: in-memory per-IP throttle. Correct for a single-process self-hosted
 # app; would need shared storage (e.g. redis) if ever run multi-worker.
 _attempts = defaultdict(list)
@@ -131,6 +146,103 @@ def _too_many_attempts(key, limit=5, window=300):
 def _record_attempt(key):
     with _attempts_lock:
         _attempts[key].append(time.time())
+
+def _retry_after_seconds(key, limit=5, window=300):
+    """Seconds until ``key``'s throttle window drops back below ``limit``."""
+    now = time.time()
+    with _attempts_lock:
+        times = sorted(t for t in _attempts[key] if now - t < window)
+    if len(times) < limit:
+        return 0
+    # The oldest attempts expire first; the count drops below ``limit`` once the
+    # (len - limit + 1)-th oldest attempt leaves the window.
+    index = len(times) - limit
+    return max(1, int(math.ceil(window - (now - times[index]))))
+
+def _throttled_response(retry_after, api=False):
+    """A 429 carrying ``Retry-After`` and an actionable body (S7)."""
+    headers = {'Retry-After': str(retry_after)}
+    if api:
+        return ({'error': 'Too many requests. Retry in %d seconds.' % retry_after},
+                429, headers)
+    return Response('Too many requests. Please wait %d seconds and try again.'
+                    % retry_after, status=429, mimetype='text/plain',
+                    headers=headers)
+
+def _finite_float(value, field):
+    """Coerce ``value`` to a finite float, else return an error naming ``field``."""
+    if isinstance(value, bool):
+        return None, '%s must be a number' % field
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None, '%s must be a number' % field
+    if not math.isfinite(number):
+        return None, '%s must be a finite number' % field
+    return number, None
+
+def _validate_place_fields(data):
+    """Validate the numeric fields of a known-place payload (B3).
+
+    Returns ``(cleaned, error)``: ``cleaned`` holds coerced values for whichever
+    of ``lat``/``lon``/``radius`` were present, and ``error`` is an actionable
+    message naming the offending field (or ``None``).
+    """
+    cleaned = {}
+    if 'lat' in data:
+        lat, error = _finite_float(data['lat'], 'lat')
+        if error:
+            return None, error
+        if not -90.0 <= lat <= 90.0:
+            return None, 'lat must be between -90 and 90'
+        cleaned['lat'] = lat
+    if 'lon' in data:
+        lon, error = _finite_float(data['lon'], 'lon')
+        if error:
+            return None, error
+        if not -180.0 <= lon <= 180.0:
+            return None, 'lon must be between -180 and 180'
+        cleaned['lon'] = lon
+    if 'radius' in data:
+        raw = data['radius']
+        if isinstance(raw, bool):
+            return None, 'radius must be an integer'
+        try:
+            radius = int(raw)
+        except (TypeError, ValueError):
+            return None, 'radius must be an integer'
+        if isinstance(raw, float) and not raw.is_integer():
+            return None, 'radius must be an integer'
+        if radius < 1:
+            return None, 'radius must be at least 1'
+        cleaned['radius'] = radius
+    return cleaned, None
+
+def _validate_location_fields(data):
+    """Validate a location-ingest payload (B7).
+
+    ``lat``/``lon`` are required and range-checked; ``batt`` is validated as a
+    number when present. Returns ``(cleaned, error)``.
+    """
+    if 'lat' not in data or 'lon' not in data:
+        return None, 'lat and lon are required'
+    lat, error = _finite_float(data['lat'], 'lat')
+    if error:
+        return None, error
+    if not -90.0 <= lat <= 90.0:
+        return None, 'lat must be between -90 and 90'
+    lon, error = _finite_float(data['lon'], 'lon')
+    if error:
+        return None, error
+    if not -180.0 <= lon <= 180.0:
+        return None, 'lon must be between -180 and 180'
+    cleaned = {'lat': lat, 'lon': lon}
+    if data.get('batt') is not None:
+        batt, error = _finite_float(data['batt'], 'batt')
+        if error:
+            return None, error
+        cleaned['batt'] = batt
+    return cleaned, None
 
 def format_timestamp(ts, time_only=False):
     if time_only:
@@ -222,7 +334,7 @@ def login():
     if request.method == 'POST':
         rate_key = 'login:' + (request.remote_addr or 'unknown')
         if _too_many_attempts(rate_key):
-            abort(429)
+            return _throttled_response(_retry_after_seconds(rate_key))
         username = request.form['username'].lower()
         user = UserModel.query.filter_by(username = username).first()
         if user is not None and user.check_password(request.form['password']):
@@ -256,9 +368,8 @@ def dashboard():
     else:
         sharing_permission_count = 0
     sharing_permission_list = []
-    for user in sharing_permission:
-        username = user.get_data_owner_username()
-        sharing_permission_list.append(username)
+    for permission in sharing_permission:
+        sharing_permission_list.append(permission.get_data_owner_username())
     
     if locations:
         location = locations[0]
@@ -321,13 +432,16 @@ def register():
         if request.method == 'POST':
             rate_key = 'register:' + (request.remote_addr or 'unknown')
             if _too_many_attempts(rate_key):
-                abort(429)
+                return _throttled_response(_retry_after_seconds(rate_key))
             _record_attempt(rate_key)
             username = request.form['username'].lower()
             password = request.form['password']
 
             if not re.fullmatch(r'[a-z0-9_.-]{2,32}', username):
                 return ('Invalid username. Use 2-32 chars: a-z 0-9 _ . -')
+
+            if len(password) < MIN_PASSWORD_LENGTH:
+                return ('Password must be at least %d characters.' % MIN_PASSWORD_LENGTH, 400)
 
             if UserModel.query.filter_by(username=username).first():
                 return ('Username already present')
@@ -361,21 +475,18 @@ def register():
 def record_location():
     if request.method == 'POST':
         request_data = request.get_json(silent=True) or {}
-        if 'lat' not in request_data or 'lon' not in request_data:
-            return Response(status=400)
-        lat = request_data['lat']
-        lon = request_data['lon']
-        acc = request_data.get('acc')
+        cleaned, error = _validate_location_fields(request_data)
+        if error:
+            return {'error': error}, 400
         location = LocationsModel()
-        location.set_lat(lat)
-        location.set_lon(lon)
-        location.set_acc(acc)
+        location.set_lat(cleaned['lat'])
+        location.set_lon(cleaned['lon'])
+        location.set_acc(request_data.get('acc'))
         location.set_timestamp(datetime.now())
         location.set_userid(current_user.get_id())
         
-        batt = request_data.get('batt')
-        if batt is not None:
-            location.set_batt(batt)
+        if 'batt' in cleaned:
+            location.set_batt(cleaned['batt'])
         
         ischarging = request_data.get('ischarging', False)
         location.set_ischarging(ischarging)
@@ -418,7 +529,7 @@ def api_record_location():
     if request.method == 'POST':
         rate_key = 'recordlocation:' + (request.remote_addr or 'unknown')
         if _too_many_attempts(rate_key):
-            return Response(status=429)
+            return _throttled_response(_retry_after_seconds(rate_key), api=True)
         # ponytail: uniform 401 for all auth failures — no 500 oracle for unknown
         # users or missing headers. Skipping dummy-hash timing equalization;
         # theoretical here, pbkdf2 dominates response time for valid users.
@@ -429,15 +540,13 @@ def api_record_location():
             api_token_check = user.check_api_token(api_token)
             if api_token_check == True:
                 request_data = request.get_json(silent=True) or {}
-                if 'lat' not in request_data or 'lon' not in request_data:
-                    return Response(status=400)
-                lat = request_data['lat']
-                lon = request_data['lon']
+                cleaned, error = _validate_location_fields(request_data)
+                if error:
+                    return {'error': error}, 400
+                lat = cleaned['lat']
+                lon = cleaned['lon']
                 acc = request_data.get('acc')
-                batt = False
-                if 'batt' in request_data:
-                    batt = request_data['batt']
-                    app.logger.debug('batt is %s', batt)
+                batt = cleaned.get('batt')
                 ischarging = False
                 if 'ischarging' in request_data:
                     ischarging = request_data['ischarging'] in [True, 'true', 'True']
@@ -550,15 +659,15 @@ def api_places():
         data = request.get_json(silent=True) or {}
         try:
             name = data['name'][:100]
-            lat = float(data['lat'])
-            lon = float(data['lon'])
             webhook_url = data['webhook_url']
-            radius = max(1, int(data.get('radius') or 100))
-        except (KeyError, TypeError, ValueError):
-            return Response(status=400)
-        if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
-            return Response(status=400)
-        place = KnownPlaceModel(userid=id, name=name, lat=lat, lon=lon, radius=radius, webhook_url=webhook_url, enabled=data.get('enabled', True), include_coords_in_webhook=data.get('include_coords_in_webhook', False))
+        except (KeyError, TypeError):
+            return {'error': 'name and webhook_url are required'}, 400
+        cleaned, error = _validate_place_fields(data)
+        if error:
+            return {'error': error}, 400
+        if 'lat' not in cleaned or 'lon' not in cleaned:
+            return {'error': 'lat and lon are required'}, 400
+        place = KnownPlaceModel(userid=id, name=name, lat=cleaned['lat'], lon=cleaned['lon'], radius=cleaned.get('radius', 100), webhook_url=webhook_url, enabled=data.get('enabled', True), include_coords_in_webhook=data.get('include_coords_in_webhook', False))
         db.session.add(place)
         db.session.commit()
         return Response(status=201)
@@ -567,10 +676,13 @@ def api_places():
         place = KnownPlaceModel.query.filter_by(id=data.get('id'), userid=id).first()
         if not place:
             return Response(status=404)
+        cleaned, error = _validate_place_fields(data)
+        if error:
+            return {'error': error}, 400
         if 'name' in data: place.name = data['name']
-        if 'lat' in data: place.lat = data['lat']
-        if 'lon' in data: place.lon = data['lon']
-        if 'radius' in data: place.radius = data['radius']
+        if 'lat' in cleaned: place.lat = cleaned['lat']
+        if 'lon' in cleaned: place.lon = cleaned['lon']
+        if 'radius' in cleaned: place.radius = cleaned['radius']
         if 'webhook_url' in data: place.webhook_url = data['webhook_url']
         if 'enabled' in data: place.enabled = data['enabled']
         if 'include_coords_in_webhook' in data: place.include_coords_in_webhook = data['include_coords_in_webhook']
@@ -665,8 +777,11 @@ def account_action(action):
         else:
             return Response(status=400)
     elif action == "remove_permission":
-        request_data = request.get_json()
-        remove_permission_username = request_data['username'].lower()
+        request_data = request.get_json(silent=True) or {}
+        raw_username = request_data.get('username')
+        remove_permission_username = str(raw_username).lower() if raw_username else ''
+        if not remove_permission_username:
+            return {'error': 'username is required'}, 400
         delete_row = SharingPermissionModel.query.filter_by(data_owner_id=id,shared_with_username=remove_permission_username).delete(synchronize_session=False)
         db.session.commit()
         app.logger.info('%s removed %s from viewing their location.', username, remove_permission_username)
@@ -674,50 +789,42 @@ def account_action(action):
             return Response(status=201)
         return Response(status=400)
     elif action == "update_name":
-        request_data = request.get_json()
-        if 'fname' in request_data:
-            fname = request_data['fname'][:30]
-        if 'lname' in request_data:
-            lname = request_data['lname'][:40]
+        request_data = request.get_json(silent=True) or {}
+        fname = request_data.get('fname')
+        lname = request_data.get('lname')
+        if not str(fname or '').strip() or not str(lname or '').strip():
+            app.logger.info('%s attempted to set their name, but sent a bad request.', username)
+            return {'error': 'Both first name and last name are required.'}, 400
+        fname = str(fname)[:30]
+        lname = str(lname)[:40]
         userData = UserDataModel.query.filter_by(id=id).first()
         #If this is the first time the user is setting their information, a userdata db record must be created.
         if userData is None:
             userData = UserDataModel(id=id)
-        if fname and lname:
-            app.logger.info('%s updated their full name to %s %s', username, fname, lname)
-            userData.set_fname(fname)
-            userData.set_lname(lname)
-        elif lname:
-            app.logger.info('%s updated their last name to %s', username, lname)
-            userData.set_lname(lname)
-        elif fname:
-            app.logger.info('%s updated their first name to %s', username, fname)
-            userData.set_fname(fname)
-        else:
-            app.logger.info('%s attempted to set their name, but sent a bad request.', username)
-            return Response(status=400)
+        app.logger.info('%s updated their full name to %s %s', username, fname, lname)
+        userData.set_fname(fname)
+        userData.set_lname(lname)
         db.session.add(userData)
         db.session.commit()
         return Response(status=201)
     elif action == "update_password":
-        request_data = request.get_json()
-        if 'current_password' in request_data:
-            current_password = request_data['current_password']
-        if 'new_password' in request_data:
-            new_password = request_data['new_password']
-        if current_password and new_password:
-            if current_user.check_password(current_password):
-                current_user.set_password(new_password)
-                app.logger.info('%s updated their password', username)
-                db.session.add(current_user)
-                db.session.commit()
-                return Response(status=201)
-            else:
-                app.logger.info('%s attempted to update their password, but sent a bad current password.', username)
-                return Response(status=401)
-        else:
+        request_data = request.get_json(silent=True) or {}
+        current_password = request_data.get('current_password')
+        new_password = request_data.get('new_password')
+        if not current_password or not new_password:
             app.logger.info('%s attempted to update their password, but sent a bad request.', username)
-            return Response(status=400)
+            return {'error': 'current_password and new_password are required.'}, 400
+        if len(new_password) < MIN_PASSWORD_LENGTH:
+            return {'error': 'Password must be at least %d characters.' % MIN_PASSWORD_LENGTH}, 400
+        if current_user.check_password(current_password):
+            current_user.set_password(new_password)
+            app.logger.info('%s updated their password', username)
+            db.session.add(current_user)
+            db.session.commit()
+            return Response(status=201)
+        else:
+            app.logger.info('%s attempted to update their password, but sent a bad current password.', username)
+            return Response(status=401)
     elif action == "delete_locations":
         LocationsModel.query.filter_by(userid=id).delete(synchronize_session=False)
         db.session.commit()
@@ -842,13 +949,20 @@ def admin_audit():
 @login_required
 @admin_required
 def admin_create_user():
-    data = request.get_json()
-    username = data['username'].lower()
+    data = request.get_json(silent=True) or {}
+    username = str(data.get('username') or '').lower()
+    password = data.get('password')
+    if not username:
+        return {'error': 'username is required'}, 400
+    if not password:
+        return {'error': 'password is required'}, 400
+    if len(password) < MIN_PASSWORD_LENGTH:
+        return {'error': 'Password must be at least %d characters.' % MIN_PASSWORD_LENGTH}, 400
     if UserModel.query.filter_by(username=username).first():
         return {'error': 'Username exists'}, 400
     
     user = UserModel(username=username)
-    user.set_password(data['password'])
+    user.set_password(password)
     db.session.add(user)
     db.session.commit()
     
@@ -861,7 +975,7 @@ def admin_create_user():
 @login_required
 @admin_required
 def admin_update_user(user_id):
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     app.logger.debug(f"DEBUG: Received update request for user {user_id}. Data: {data}")
     user_data = UserDataModel.query.filter_by(id=user_id).first()
     
@@ -869,10 +983,16 @@ def admin_update_user(user_id):
         app.logger.info(f"Creating missing user_data record for user {user_id}")
         user_data = UserDataModel(id=user_id)
         db.session.add(user_data)
-        
+    
+    new_is_admin = data.get('is_admin', user_data.is_admin)
+    if user_data.is_admin and not new_is_admin:
+        admin_count = UserDataModel.query.filter_by(is_admin=True).count()
+        if admin_count <= 1:
+            return {'error': 'Cannot remove the last admin'}, 400
+
     user_data.fname = data.get('fname', user_data.fname)
     user_data.lname = data.get('lname', user_data.lname)
-    user_data.is_admin = data.get('is_admin', user_data.is_admin)
+    user_data.is_admin = new_is_admin
     db.session.commit()
     return Response(status=200)
 
