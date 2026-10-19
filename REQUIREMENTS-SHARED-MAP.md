@@ -1,17 +1,19 @@
 # Shared map: show everyone who shares with you
 
 Repo: `/home/hermes/projects/beakon`. Approved design: `PROPOSAL-shared-map.md`.
-Implement that proposal, with the corrections below.
+
+> **ADDENDUM (owner follow-up): dimming IS wanted.** The owner first said "don't
+> change stale threshold", then asked to add the dimming idea after all. Read the
+> "Dimming" section at the end — it supersedes correction 1 below for the **new
+> group view only**. The existing single-person view's behaviour is still not to be
+> changed.
 
 ## Corrections to the proposal (these win)
 
-1. **Do NOT add any staleness/dimming logic.** The owner said "don't change stale
-   threshold". The current map has **no** staleness concept — no threshold, no
-   dimming, no opacity rule. It shows a timestamp string produced by
-   `format_timestamp()` ("just now", "N minutes ago") and refreshes every 10s
-   (`static/js/map.js:128 REFRESH_INTERVAL_MS = 10000`). **Match that exactly.**
-   Do not invent a stale rule, do not dim, do not grey out. If you think something
-   looks stale, show its timestamp text like the existing view does.
+1. ~~**Do NOT add any staleness/dimming logic.**~~ **Superseded — see the Dimming
+   section.** What still holds: the **existing** `/map/<username>` view must not
+   change at all — it keeps its current behaviour (no threshold, no dimming, just
+   `format_timestamp()` strings and a 10s refresh). Do not retrofit dimming onto it.
 2. The proposal's claim that the locations endpoint is throttled is **not
    established** — the throttle keys are login/register/recordlocation. The
    one-call design is still required, for efficiency (N sharers × a 10s refresh is
@@ -102,3 +104,61 @@ working exactly as they do now. This feature is purely additive.
 - Do NOT deploy and do NOT restart the live service. Tests only.
 - Report honestly: what passed, what you could not verify, and anything you chose
   differently and why.
+
+---
+
+# Dimming (owner follow-up — build this too)
+
+The owner reversed the earlier "no dimming" instruction. Dimming **is** wanted, on
+the **new group view only**.
+
+## Why the threshold question resolves this way
+
+The owner said "don't change stale threshold". There is **no** existing threshold to
+change — the single-person map has no staleness concept at all. So:
+
+- The **existing** `/map/<username>` view is left exactly as it is. Its "threshold"
+  is untouched because it has none.
+- The **new** group view gets a **new, documented** rule. This is not a change to an
+  existing threshold; it is the first one, scoped to a new surface.
+
+## The rule
+
+- A person whose **latest** fix is older than **10 minutes** is rendered dimmed
+  (reduced opacity on their marker and trail) and marked as stale in the legend.
+- 10 minutes is chosen deliberately: the companion reports every **90 seconds**, so
+  10 minutes is roughly 6-7 missed reports — long enough to survive a brief signal
+  loss without crying wolf, short enough that a dead client does not look current.
+- The threshold lives in **one named constant** in the new JS (e.g.
+  `STALE_AFTER_SECONDS = 600`), not inline, so it can be adjusted in one place.
+- Dimming is **visual only**. It must never hide a person, drop them from the
+  legend, or alter what the API returns.
+
+## What the API must add
+
+The client currently receives only **strings** from `format_timestamp()`
+("just now", "N minutes ago") and cannot compute an age from them. So the **new**
+endpoint must include a numeric age alongside the existing string:
+
+```json
+"latest": {"lat":.., "lon":.., "timestamp":"3 minutes ago",
+           "age_seconds": 187, "batt":.., "ischarging":..}
+```
+
+- `age_seconds` is `now - latest.timestamp` in whole seconds, server-side.
+- Keep `timestamp` as the `format_timestamp()` string — the UI still shows it.
+- **Do not change** `/api/locations/<map_username>` or any existing endpoint to add
+  this. It belongs to the new endpoint only.
+
+## Acceptance criteria for dimming
+
+1. A person whose latest fix is newer than the threshold renders **not** dimmed.
+2. A person whose latest fix is older than the threshold renders **dimmed** and is
+   flagged stale in the legend.
+3. The boundary is tested (just under vs just over the threshold) — prove it
+   red-capable by breaking the comparison.
+4. `age_seconds` is present and numerically correct for a known fixture age.
+5. A stale person is still **present** in the API response and still listed in the
+   legend — dimming hides nothing.
+6. The existing `/map/<username>` view is **unchanged** — assert it still renders as
+   before with no dimming applied.
