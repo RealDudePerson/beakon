@@ -5,6 +5,7 @@ import math
 import random
 import re
 import ipaddress
+import tempfile
 import threading
 import time
 import requests
@@ -49,28 +50,62 @@ file_handler.setFormatter(logging.Formatter('%(asctime)s [%(process)-5d:%(thread
 app.logger.addHandler(file_handler)
 app.logger.setLevel(logging.DEBUG)
 
+# The historical config format is ``KEY = VALUE`` with bare (unquoted) values
+# such as ``TRUSTED_PROXY_IPS = 192.168.2.8``. Flask's ``from_pyfile`` executes
+# the file as Python, so bare values are normalised to string literals before
+# loading. Quoted values, Python booleans and the legacy yes/no/on/off/1/0
+# words keep their previous meaning.
+_BOOL_WORDS = {
+    'true': True, 'false': False, 'yes': True, 'no': False,
+    'on': True, 'off': False, '1': True, '0': False,
+}
+
+
+def _normalise_config_source(text):
+    """Turn a legacy ``KEY = VALUE`` file into valid Python source."""
+    lines = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith('#') or '=' not in stripped:
+            lines.append(line)
+            continue
+        key, _, value = stripped.partition('=')
+        key = key.strip()
+        value = value.strip()
+        if not key.isidentifier():
+            lines.append(line)
+            continue
+        if not value:
+            lines.append('%s = %r' % (key, ''))
+        elif len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+            lines.append('%s = %s' % (key, value))
+        elif value.lower() in _BOOL_WORDS:
+            lines.append('%s = %r' % (key, _BOOL_WORDS[value.lower()]))
+        else:
+            lines.append('%s = %r' % (key, value))
+    return '\n'.join(lines) + '\n'
+
+
 def load_config(app, config_path):
     """Populate ``app.config`` from a ``KEY = VALUE`` config file.
 
-    A key is applied whenever the line names a key, even when the value is an
-    empty string. An empty value is a legitimate setting (for example an unset
+    Loading is delegated to :meth:`flask.Config.from_pyfile` so that a key is
+    applied whenever the file *names* it, even when the value is empty. An
+    empty value is a legitimate setting (for example an unset
     ``MAPBOX_API_KEY``) and must survive the loader; dropping it leaves later
-    subscripts to raise ``KeyError`` and turn into HTTP 500s.
+    subscripts to raise ``KeyError`` and turn into HTTP 500s. The legacy
+    bare-value syntax is normalised to valid Python first (see
+    ``_normalise_config_source``).
     """
     with open(config_path, 'r') as f:
-        for line in f:
-            line = line.strip()
-            if line and not line.startswith('#') and '=' in line:
-                key, value = line.split('=', 1)
-                key = key.strip()
-                value = value.strip().strip("'\"")
-                if not key:
-                    continue
-                if value.lower() in ('true', '1', 'yes', 'on'):
-                    value = True
-                elif value.lower() in ('false', '0', 'no', 'off'):
-                    value = False
-                app.config[key] = value
+        source = _normalise_config_source(f.read())
+    fd, normalised_path = tempfile.mkstemp(prefix='beakon-config-', suffix='.py')
+    try:
+        with os.fdopen(fd, 'w') as f:
+            f.write(source)
+        app.config.from_pyfile(normalised_path)
+    finally:
+        os.unlink(normalised_path)
 
 # Load config
 load_config(app, _default_config_path())
@@ -96,12 +131,53 @@ with app.app_context():
     from models import UserModel, LocationsModel, UserDataModel, SharingPermissionModel, KnownPlaceModel
     db.create_all()
 
+# Tier 3 item 7: retention is config-driven and defaults to OFF. A window of 0
+# (or an unset/non-numeric value) means "keep everything"; the purge only runs
+# when the operator opts in via RETENTION_DAYS in config.cfg.
+def _retention_days():
+    """Configured retention window in days; 0 means keep everything."""
+    raw = app.config.get('RETENTION_DAYS', 0)
+    try:
+        days = int(raw)
+    except (TypeError, ValueError):
+        app.logger.warning(
+            'Ignoring non-numeric RETENTION_DAYS=%r; retention disabled.', raw)
+        return 0
+    return days if days > 0 else 0
+
+
+def purge_old_locations(days=None, now=None):
+    """Delete location rows older than ``days`` days; return the count removed.
+
+    A missing or non-positive window is a no-op, so the default configuration
+    never deletes anything. ``now`` is injectable for tests.
+    """
+    if days is None:
+        days = _retention_days()
+    if days <= 0:
+        return 0
+    cutoff = (now or datetime.now()) - timedelta(days=days)
+    deleted = LocationsModel.query.filter(
+        LocationsModel.timestamp < cutoff
+    ).delete(synchronize_session=False)
+    db.session.commit()
+    if deleted:
+        app.logger.info('Retention purge removed %d location row(s) older '
+                        'than %s.', deleted, cutoff)
+    return deleted
+
+
 # Initialize Scheduler
 scheduler = APScheduler()
 scheduler.init_app(app)
 scheduler.start()
 geofence_interval = int(app.config.get('GEOFENCE_CHECK_INTERVAL', 5))
 scheduler.add_job(id='geofencing_task', func=check_geofences, args=[app], trigger='interval', minutes=geofence_interval)
+retention_days = _retention_days()
+if retention_days > 0:
+    scheduler.add_job(id='retention_task', func=purge_old_locations,
+                      trigger='interval', hours=24)
+    app.logger.info('Location retention enabled: %d day(s).', retention_days)
 
 # Cookie security settings
 app.config['SESSION_COOKIE_SECURE'] = True
@@ -114,7 +190,12 @@ app.config['REMEMBER_COOKIE_SAMESITE'] = 'Lax'
 talisman = Talisman(app,
     content_security_policy={
         'default-src': "'self'",
-        'script-src': "'self' 'unsafe-eval' 'unsafe-inline'",
+        # 'unsafe-inline' is gone: all inline <script> bodies now live under
+        # static/js/ and every inline on*= handler is wired with
+        # addEventListener. 'unsafe-eval' stays for Flatpickr.
+        'script-src': "'self' 'unsafe-eval'",
+        # style-src keeps 'unsafe-inline': templates still carry static
+        # style="..." attributes and layout.html has an inline <style> block.
         'style-src': "'self' 'unsafe-inline'",
         'img-src': "'self' data: https://*.tiles.mapbox.com https://api.mapbox.com",
         'connect-src': "'self' https://api.mapbox.com",
@@ -286,6 +367,18 @@ def _validate_location_fields(data):
             return None, error
         cleaned['batt'] = batt
     return cleaned, None
+
+def _log_request_summary(route, status, fields=()):
+    """Emit a redacted request summary (S9).
+
+    Only the HTTP method, the route, the response status and the *names* of the
+    fields present are logged. Request bodies carry coordinates and API tokens;
+    their values must never reach the log.
+    """
+    names = ', '.join(sorted(str(f) for f in fields)) if fields else 'none'
+    app.logger.debug('%s %s -> %s (fields present: %s)',
+                     request.method, route, status, names)
+
 
 def format_timestamp(ts, time_only=False):
     if time_only:
@@ -536,6 +629,7 @@ def record_location():
         
         db.session.add(location)
         db.session.commit()
+        _log_request_summary('/recordlocation', 201, request_data.keys())
         return Response(status=201)
     return render_template('recordlocation.html')
 
@@ -593,7 +687,6 @@ def api_record_location():
                 ischarging = False
                 if 'ischarging' in request_data:
                     ischarging = request_data['ischarging'] in [True, 'true', 'True']
-                    app.logger.debug('ischarging is %s', ischarging)
                 location = LocationsModel()
                 location.set_lat(lat)
                 location.set_lon(lon)
@@ -607,6 +700,8 @@ def api_record_location():
                 db.session.add(location)
                 db.session.commit()
                 status_code = Response(status=201)
+                _log_request_summary('/api/recordlocation', 201,
+                                     request_data.keys())
                 app.logger.info('%s updated their Location.', username)
                 return status_code
         _record_attempt(rate_key)
@@ -1019,7 +1114,6 @@ def admin_create_user():
 @admin_required
 def admin_update_user(user_id):
     data = request.get_json(silent=True) or {}
-    app.logger.debug(f"DEBUG: Received update request for user {user_id}. Data: {data}")
     user_data = UserDataModel.query.filter_by(id=user_id).first()
     
     if not user_data:
@@ -1031,12 +1125,14 @@ def admin_update_user(user_id):
     if user_data.is_admin and not new_is_admin:
         admin_count = UserDataModel.query.filter_by(is_admin=True).count()
         if admin_count <= 1:
+            _log_request_summary('/admin/users/<id>/update', 400, data.keys())
             return {'error': 'Cannot remove the last admin'}, 400
 
     user_data.fname = data.get('fname', user_data.fname)
     user_data.lname = data.get('lname', user_data.lname)
     user_data.is_admin = new_is_admin
     db.session.commit()
+    _log_request_summary('/admin/users/<id>/update', 200, data.keys())
     return Response(status=200)
 
 @app.route('/admin/users/<int:user_id>/reset-token', methods=['POST'])
@@ -1064,6 +1160,16 @@ def admin_delete_user(user_id):
     target_data = UserDataModel.query.filter_by(id=user_id).first()
     if target_data and target_data.is_admin and UserDataModel.query.filter_by(is_admin=True).count() <= 1:
         return {'error': 'Cannot delete the last admin'}, 400
+    # B9: drop every sharing_permission row that references the user, in either
+    # direction, in the same transaction as the account deletion. The
+    # data_owner_id side is also covered by the ORM cascade, but shared_with_id
+    # has no relationship and would otherwise be left orphaned -- and, because
+    # SQLite reuses ids, could be inherited by a future account. (users.id now
+    # uses AUTOINCREMENT, but the cleanup is still required for existing rows.)
+    SharingPermissionModel.query.filter(
+        (SharingPermissionModel.data_owner_id == user_id) |
+        (SharingPermissionModel.shared_with_id == user_id)
+    ).delete(synchronize_session=False)
     db.session.delete(user)
     db.session.commit()
     return Response(status=200)

@@ -4,6 +4,7 @@ Each test maps to an acceptance criterion and is written so that
 re-introducing the original bug makes it fail.
 """
 
+import os
 from datetime import datetime
 
 import pytest
@@ -15,6 +16,7 @@ from models import (UserModel, UserDataModel, LocationsModel,
                     SharingPermissionModel, KnownPlaceModel, db)
 
 HTTPS = 'https://localhost'
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 # --------------------------------------------------------------------------
@@ -450,7 +452,13 @@ def test_admin_page_has_add_user_button(flask_app):
     make_user(flask_app, 'admin_ui', is_admin=True)
     client = login(flask_app, 'admin_ui')
     html = client.get('/admin', base_url=HTTPS).get_data(as_text=True)
-    assert 'openAddModal()' in html
+    # Tier 3 removed the inline onclick (CSP has no 'unsafe-inline'); the button
+    # is now wired by id in admin.js.
+    assert 'id="add-user-btn"' in html
+    with open(os.path.join(REPO_ROOT, 'static', 'js', 'admin.js')) as f:
+        admin_js = f.read()
+    assert "getElementById('add-user-btn')" in admin_js
+    assert 'openAddModal' in admin_js
 
 
 # --------------------------------------------------------------------------

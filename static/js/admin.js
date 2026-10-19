@@ -1,3 +1,7 @@
+// Admin dashboard logic. Wired entirely with addEventListener so admin.html
+// needs no inline on*= handlers (CSP). The user list arrives via a data-*
+// attribute on #admin-users-data.
+var adminUsers = [];
 
 function saveUser() {
     var id = document.getElementById('user-id').value;
@@ -70,3 +74,40 @@ function openAddModal() {
     document.getElementById('user-is-admin').checked = false;
     $('#user-modal').foundation('open');
 }
+
+document.addEventListener('DOMContentLoaded', function () {
+    var dataEl = document.getElementById('admin-users-data');
+    if (dataEl) {
+        try {
+            adminUsers = JSON.parse(dataEl.dataset.users || '[]');
+        } catch (e) {
+            adminUsers = [];
+        }
+    }
+
+    var addBtn = document.getElementById('add-user-btn');
+    if (addBtn) {
+        addBtn.addEventListener('click', openAddModal);
+    }
+    var saveBtn = document.getElementById('save-user-btn');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', saveUser);
+    }
+
+    var table = document.getElementById('admin-users-table');
+    if (table) {
+        table.addEventListener('click', function (e) {
+            var btn = e.target.closest('button[data-action]');
+            if (!btn) return;
+            var id = parseInt(btn.getAttribute('data-user-id'), 10);
+            var action = btn.getAttribute('data-action');
+            if (action === 'edit') {
+                openEditModal(id);
+            } else if (action === 'reset-token') {
+                resetToken(id);
+            } else if (action === 'delete') {
+                deleteUser(id);
+            }
+        });
+    }
+});

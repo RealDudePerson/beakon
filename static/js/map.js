@@ -1,0 +1,180 @@
+// Single-user map page logic, moved out of map.html so the page needs no
+// inline <script> (CSP). Server data arrives via data-* attributes on
+// #map-page-data. Only loaded when the page has location data.
+(function () {
+    'use strict';
+
+    var dataEl = document.getElementById('map-page-data');
+    if (!dataEl) {
+        return;
+    }
+
+    var initialLat = parseFloat(dataEl.dataset.lat);
+    var initialLon = parseFloat(dataEl.dataset.lon);
+    var mapboxapi = dataEl.dataset.mapboxapi || '';
+    var initialLocations = JSON.parse(dataEl.dataset.locations || '[]');
+    var MAP_USERNAME = dataEl.dataset.mapUsername || '';
+
+    var map = L.map('map').setView([initialLat, initialLon], 13);
+    if (mapboxapi) {
+        L.tileLayer('https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token=' + mapboxapi, {
+            attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Imagery © <a href="https://www.mapbox.com/">Mapbox</a>',
+            maxZoom: 18,
+            id: 'mapbox/streets-v11',
+            tileSize: 512,
+            zoomOffset: -1,
+            accessToken: mapboxapi
+        }).addTo(map);
+    } else {
+        beakonMapUnavailable(map);
+    }
+
+    var markersLayer = L.layerGroup().addTo(map);
+    var locationsLayer = L.layerGroup().addTo(map);
+
+    flatpickr('#date-picker', {
+        defaultDate: null,
+        allowInput: true,
+        altInput: true,
+        altFormat: 'F j, Y',
+        dateFormat: 'Y-m-d',
+        maxDate: 'today'
+    });
+
+    function haversineMeters(lat1, lon1, lat2, lon2) {
+        var R = 6371000;
+        var phi1 = lat1 * Math.PI / 180;
+        var phi2 = lat2 * Math.PI / 180;
+        var deltaPhi = (lat2 - lat1) * Math.PI / 180;
+        var deltaLambda = (lon2 - lon1) * Math.PI / 180;
+        var a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+                Math.cos(phi1) * Math.cos(phi2) *
+                Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+        var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    }
+
+    function clusterLocations(locations) {
+        if (locations.length === 0) return [];
+        var clustered = [locations[0]];
+        for (var i = 1; i < locations.length; i++) {
+            var curr = locations[i];
+            var prev = clustered[clustered.length - 1];
+            var dist = haversineMeters(prev.lat, prev.lon, curr.lat, curr.lon);
+            var timeDiff = (new Date(curr.timestamp) - new Date(prev.timestamp)) / 1000 / 60;
+            if (dist >= 50 || timeDiff >= 5) {
+                clustered.push(curr);
+            }
+        }
+        return clustered;
+    }
+
+    function createIcon(idx, total) {
+        var isNewest = idx === 0;
+        var size = isNewest ? 16 : 12 - (idx * 0.8);
+        var hue = 210 - (idx * 15);
+        return L.divIcon({
+            className: 'custom-marker',
+            html: '<div style="width:' + size + 'px;height:' + size + 'px;background:hsl(' + hue + ', 80%, 50%);border:2px solid white;border-radius:50%;box-shadow:0 2px 4px rgba(0,0,0,0.3);"></div>',
+            iconSize: [size, size],
+            iconAnchor: [size / 2, size / 2]
+        });
+    }
+
+    function updateMap(locations, isNewData) {
+        markersLayer.clearLayers();
+        locationsLayer.clearLayers();
+        var filtered = clusterLocations(locations);
+        for (var i = 0; i < filtered.length - 1; i++) {
+            var hue = 210 - (i * 15);
+            var isDashed = i >= 3;
+            var segment = L.polyline([
+                [filtered[i].lat, filtered[i].lon],
+                [filtered[i + 1].lat, filtered[i + 1].lon]
+            ], {
+                color: 'hsl(' + hue + ', 80%, 50%)',
+                weight: 3,
+                opacity: 0.8,
+                dashArray: isDashed ? '5, 5' : null
+            });
+            locationsLayer.addLayer(segment);
+        }
+        filtered.forEach(function (loc, idx) {
+            var isNewest = idx === filtered.length - 1;
+            var marker = L.marker([loc.lat, loc.lon], {icon: createIcon(idx, filtered.length)});
+            marker.bindPopup('<b>' + (isNewest ? 'Current Location' : 'Location ' + (filtered.length - idx)) + '</b><br>' + loc.timestamp);
+            markersLayer.addLayer(marker);
+        });
+        if (filtered.length > 0 && !selectedDate && isNewData) {
+            map.panTo([filtered[0].lat, filtered[0].lon], {animate: true, duration: 1});
+        }
+    }
+
+    function updateStats(latest) {
+        if (!latest) return;
+        document.getElementById('stat-timestamp').textContent = latest.timestamp;
+        document.getElementById('stat-lat').textContent = latest.lat;
+        document.getElementById('stat-lon').textContent = latest.lon;
+        document.getElementById('stat-gmap').href = 'https://maps.google.com/?q=' + latest.lat + ',' + latest.lon;
+        var battSpan = document.getElementById('stat-batt');
+        if (battSpan) {
+            battSpan.textContent = latest.batt;
+        }
+    }
+
+    updateMap(initialLocations, true);
+
+    var refreshInterval = null;
+    var REFRESH_INTERVAL_MS = 10000;
+    var selectedDate = null;
+    var lastKnownTimestamp = null;
+
+    function fetchLocations() {
+        var url = '/api/locations/' + MAP_USERNAME;
+        if (selectedDate) {
+            url += '?date=' + selectedDate;
+        }
+        return fetch(url)
+            .then(function (response) { return response.json(); })
+            .then(function (data) {
+                if (data.locations && data.locations.length > 0) {
+                    var isNewData = lastKnownTimestamp === null || data.latest.timestamp !== lastKnownTimestamp;
+                    updateMap(data.locations, isNewData);
+                    if (isNewData) {
+                        updateStats(data.latest);
+                    }
+                    lastKnownTimestamp = data.latest.timestamp;
+                }
+            })
+            .catch(function (err) { console.error('Fetch error:', err); });
+    }
+
+    document.getElementById('date-picker').addEventListener('change', function (e) {
+        selectedDate = e.target.value;
+        fetchLocations();
+    });
+
+    function startRefresh() {
+        if (refreshInterval) return;
+        refreshInterval = setInterval(function () {
+            fetchLocations();
+        }, REFRESH_INTERVAL_MS);
+    }
+
+    function stopRefresh() {
+        if (refreshInterval) {
+            clearInterval(refreshInterval);
+            refreshInterval = null;
+        }
+    }
+
+    document.addEventListener('visibilitychange', function () {
+        if (document.hidden) {
+            stopRefresh();
+        } else {
+            startRefresh();
+        }
+    });
+
+    startRefresh();
+})();

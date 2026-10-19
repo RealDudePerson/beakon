@@ -18,8 +18,8 @@
   <div class="large-12 cell">
     <div class="callout">
       <h5>User Management</h5>
-      <button class="button" onclick="openAddModal()">Add User</button>
-      <table class="stack hover-unstriped">
+      <button class="button" id="add-user-btn" type="button">Add User</button>
+      <table id="admin-users-table" class="stack hover-unstriped">
         <thead>
           <tr>
             <th>ID</th>
@@ -41,9 +41,9 @@
               {% endif %}
             </td>
             <td data-label="Actions">
-              <button class="button small" onclick="openEditModal({{user.id}})">Edit</button>
-              <button class="button small secondary" onclick="resetToken({{user.id}})">Reset Token</button>
-              <button class="button small alert" onclick="deleteUser({{user.id}})">Delete</button>
+              <button class="button small" type="button" data-action="edit" data-user-id="{{user.id}}">Edit</button>
+              <button class="button small secondary" type="button" data-action="reset-token" data-user-id="{{user.id}}">Reset Token</button>
+              <button class="button small alert" type="button" data-action="delete" data-user-id="{{user.id}}">Delete</button>
             </td>
           </tr>
           {% endfor %}
@@ -61,7 +61,7 @@
   <label>First Name <input type="text" id="user-fname"></label>
   <label>Last Name <input type="text" id="user-lname"></label>
   <label><input type="checkbox" id="user-is-admin"> Is Admin</label>
-  <button class="button" onclick="saveUser()">Save</button>
+  <button class="button" id="save-user-btn" type="button">Save</button>
   <button class="close-button" data-close aria-label="Close modal" type="button"><span aria-hidden="true">&times;</span></button>
 </div>
 
@@ -71,9 +71,9 @@
     <a href="{{url_for('admin_audit')}}" class="button secondary">Audit Logs</a>
   </div>
 </div>
+<div id="admin-users-data" hidden data-users='{{ users | tojson }}'></div>
 {% endblock %}
 
 {% block script %}
-<script>var adminUsers = {{ users | tojson }};</script>
 <script src="{{ url_for('static', filename = 'js/admin.js') }}"></script>
 {% endblock %}

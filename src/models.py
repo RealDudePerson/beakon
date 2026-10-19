@@ -7,7 +7,14 @@ db = SQLAlchemy()
 
 class UserModel(UserMixin, db.Model):
     __tablename__ = 'users'
-    
+    # B9: SQLite reuses the highest rowid after the row holding it is deleted,
+    # so a new account could inherit a departed user's id (and therefore their
+    # incoming sharing permissions). AUTOINCREMENT makes the id monotonic by
+    # tracking it in sqlite_sequence. Existing databases need the table-rebuild
+    # migration in migrations/003_users_autoincrement.py; this table arg only
+    # takes effect for databases created from scratch.
+    __table_args__ = {'sqlite_autoincrement': True}
+
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(100), unique=True)
     password_hash = db.Column(db.String())

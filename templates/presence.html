@@ -33,78 +33,8 @@
     <div id="presence-results"></div>
   </div>
 </div>
+<div id="presence-data" hidden data-mapboxapi="{{ mapboxapi }}"></div>
 {% endblock %}
 {% block script %}
-<script>
-var mapboxToken = '{{mapboxapi}}';
-var map = L.map('map').setView([0, 0], 2);
-{% if mapboxapi %}
-L.tileLayer('https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token=' + mapboxToken, {
-    attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Imagery &copy; <a href="https://www.mapbox.com/">Mapbox</a>',
-    maxZoom: 18,
-    id: 'mapbox/streets-v11',
-    tileSize: 512,
-    zoomOffset: -1,
-    accessToken: mapboxToken
-}).addTo(map);
-{% else %}
-beakonMapUnavailable(map);
-{% endif %}
-
-var searchMarker = null;
-var searchCircle = null;
-var resultsLayer = L.layerGroup().addTo(map);
-
-function redraw() {
-    if (!searchMarker) return;
-    var radius = parseInt(document.getElementById('presence-radius').value) || 100;
-    var pos = searchMarker.getLatLng();
-    if (searchCircle) map.removeLayer(searchCircle);
-    searchCircle = L.circle(pos, {radius: radius, color: 'blue', fillColor: '#3388ff', fillOpacity: 0.2}).addTo(map);
-}
-
-map.on('click', function(e) {
-    if (searchMarker) map.removeLayer(searchMarker);
-    searchMarker = L.marker(e.latlng).addTo(map);
-    redraw();
-});
-
-document.getElementById('presence-radius').addEventListener('input', redraw);
-
-document.getElementById('presence-search-btn').addEventListener('click', function() {
-    if (!searchMarker) { alert('Click the map to pick a search point.'); return; }
-    resultsLayer.clearLayers();
-    document.getElementById('presence-results').innerHTML = '';
-    var params = new URLSearchParams({
-        user: document.getElementById('presence-user').value,
-        lat: searchMarker.getLatLng().lat,
-        lon: searchMarker.getLatLng().lng,
-        radius: document.getElementById('presence-radius').value
-    });
-    fetch('/api/presence?' + params.toString())
-        .then(function(r) {
-            if (!r.ok) {
-                return r.text().then(function(body) {
-                    throw new Error('Server returned HTTP ' + r.status + (body ? ' (' + body.substring(0, 120) + ')' : ''));
-                });
-            }
-            return r.json();
-        })
-        .then(function(data) {
-            if (data.error) { alert(data.error); return; }
-            var html = '<h6>' + data.days.length + ' day(s) with hits</h6><ul>';
-            data.days.forEach(function(d) {
-                html += '<li><b>' + d.date + '</b>: ' + d.hits + ' hits (' + d.first + ' &rarr; ' + d.last + ')</li>';
-            });
-            html += '</ul>';
-            document.getElementById('presence-results').innerHTML = html;
-            data.days.forEach(function(d) {
-                var m = L.marker([d.last_lat, d.last_lon]).addTo(resultsLayer);
-                m.bindPopup('<b>' + d.date + '</b><br>' + d.hits + ' hits<br>' + d.first + ' &rarr; ' + d.last);
-            });
-            if (data.days.length === 0) { alert('No hits inside the circle in recent history.'); }
-        })
-        .catch(function(e) { alert('Error: ' + (e && e.message ? e.message : e)); });
-});
-</script>
+<script src="{{ url_for('static', filename = 'js/presence.js') }}"></script>
 {% endblock %}
