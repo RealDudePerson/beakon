@@ -332,7 +332,7 @@ def test_login_throttle_returns_retry_after_and_body(flask_app):
                                     'password': 'wrong'}, base_url=HTTPS)
     assert r.status_code == 429
     assert r.headers.get('Retry-After') is not None
-    assert int(r.headers['Retry-After']) > 0
+    assert 0 < int(r.headers['Retry-After']) <= 300
     assert r.get_data(as_text=True).strip()
 
 
@@ -355,7 +355,9 @@ def test_api_throttle_returns_retry_after_and_json(flask_app):
 # --------------------------------------------------------------------------
 def test_oversized_body_returns_413(flask_app):
     client = flask_app.test_client()
-    big = 'x' * (flask_app.config['MAX_CONTENT_LENGTH'] + 1024)
+    # Comfortably above the configured cap (64 KiB) and independent of it, so
+    # removing the cap makes this test fail rather than error.
+    big = 'x' * (256 * 1024)
     resp = client.post('/login', data={'username': big, 'password': 'y'},
                        base_url=HTTPS)
     assert resp.status_code == 413
@@ -412,6 +414,25 @@ def test_admin_create_user_rejects_short_password(flask_app):
                        base_url=HTTPS)
     assert resp.status_code == 400
     assert b'at least' in resp.data.lower()
+
+
+def test_short_api_token_still_works(flask_app):
+    """The minimum length must not be applied to the Android API secret."""
+    uid = make_user(flask_app, 'short_token_user', token='abc')
+    client = flask_app.test_client()
+    resp = client.post('/api/recordlocation',
+                       headers={'username': 'short_token_user', 'secret': 'abc'},
+                       json={'lat': 1.0, 'lon': 2.0}, base_url=HTTPS)
+    assert resp.status_code == 201, resp.status_code
+    with flask_app.app_context():
+        assert LocationsModel.query.filter_by(userid=uid).count() == 1
+
+
+def test_existing_short_password_can_still_log_in(flask_app):
+    """The minimum is not applied retroactively to stored passwords."""
+    make_user(flask_app, 'legacy_short_pw', password='abc')
+    client = login(flask_app, 'legacy_short_pw', password='abc')
+    assert client.get('/dashboard', base_url=HTTPS).status_code == 200
 
 
 # --------------------------------------------------------------------------
