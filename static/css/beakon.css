@@ -312,4 +312,21 @@
   flex: 0 0 auto;
 }
 
+/* Group view only: a stale (dimmed) person stays listed, just de-emphasised. */
+.shared-legend-entry.stale {
+  opacity: 0.55;
+}
+
+.shared-stale-badge {
+  margin-left: 8px;
+  padding: 1px 5px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #8a5300;
+  background: #fff3cd;
+  border-radius: 3px;
+  flex: 0 0 auto;
+}
+
 

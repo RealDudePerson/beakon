@@ -863,6 +863,11 @@ def api_get_shared_locations():
     choice: the locations of every permitted person are fetched with a single
     grouped query, so the query count does not grow with the number of sharers.
     A permitted user with no locations is omitted, not shown as a broken marker.
+
+    The group view also reports a numeric ``age_seconds`` on ``latest`` (the
+    ``format_timestamp()`` string is kept for display). The client receives only
+    strings, so it cannot derive an age itself; this new endpoint is the only
+    one that adds ``age_seconds`` — the existing endpoints are untouched.
     """
     id = current_user.get_id()
     try:
@@ -886,6 +891,10 @@ def api_get_shared_locations():
                     'lat': latest.get_lat(),
                     'lon': latest.get_lon(),
                     'timestamp': format_timestamp(latest.get_timestamp()),
+                    # Numeric age for the group view's staleness rule. The
+                    # single-person endpoint deliberately does NOT expose this.
+                    'age_seconds': int(
+                        (datetime.now() - latest.get_timestamp()).total_seconds()),
                     'batt': latest.get_batt(),
                     'ischarging': latest.get_ischarging(),
                 },

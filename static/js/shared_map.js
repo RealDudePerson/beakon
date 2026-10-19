@@ -1,8 +1,13 @@
 // Group ("everyone who shares with you") map logic, kept in a static file so
 // the template needs no inline <script> (CSP). Mirrors static/js/map.js: a
-// 10-second poll and format_timestamp() strings shown as text. There is no
-// staleness/dimming rule here, exactly as there is none in the single-person
-// view. Data comes from GET /api/locations/shared.
+// 10-second poll and format_timestamp() strings shown as text. Data comes from
+// GET /api/locations/shared.
+//
+// Group view only: a person whose LATEST fix is older than STALE_AFTER_SECONDS
+// is rendered dimmed (reduced marker/trail opacity) and flagged stale in the
+// legend. This is visual only — a stale person is still drawn and still listed;
+// dimming never hides anyone or changes what the API returns. The single-person
+// /map/<username> view has no staleness rule and is deliberately untouched.
 (function () {
     'use strict';
 
@@ -28,7 +33,17 @@
     var currentPeople = [];
     var fitted = false;     // fit the view once, on the first response
     var REFRESH_INTERVAL_MS = 10000;
+    // 10 minutes: the companion reports every 90s, so this is ~6-7 missed
+    // reports. One named constant so the threshold can be tuned in one place.
+    // Group view only; the single-person view has no such rule.
+    var STALE_AFTER_SECONDS = 600;
     var refreshInterval = null;
+
+    function isStale(ageSeconds) {
+        // Strictly older than the threshold. An unknown age is not stale.
+        // Visual only: callers must still draw and list stale people.
+        return typeof ageSeconds === 'number' && ageSeconds > STALE_AFTER_SECONDS;
+    }
 
     function colorFor(index) {
         // Golden-angle hues keep adjacent people visually distinct.
@@ -43,20 +58,22 @@
                 return;
             }
             var color = colorFor(index);
+            var stale = person.latest ? isStale(person.latest.age_seconds) : false;
             var trail = person.trail || [];
             var latlngs = trail.map(function (point) {
                 return [point.lat, point.lon];
             });
             if (latlngs.length > 1) {
                 L.polyline(latlngs, {
-                    color: color, weight: 3, opacity: 0.8
+                    color: color, weight: 3,
+                    opacity: stale ? 0.25 : 0.8
                 }).addTo(peopleLayer);
             }
             latlngs.forEach(function (latlng) { bounds.extend(latlng); });
             if (person.latest) {
                 var marker = L.circleMarker([person.latest.lat, person.latest.lon], {
                     radius: 8, color: 'white', weight: 2,
-                    fillColor: color, fillOpacity: 1
+                    fillColor: color, fillOpacity: stale ? 0.3 : 1
                 }).addTo(peopleLayer);
 
                 // Build popup/tooltip nodes with textContent: display names are
@@ -98,8 +115,10 @@
         legend.classList.remove('hide');
 
         people.forEach(function (person, index) {
+            // A stale person is still listed; only its styling changes.
+            var stale = person.latest ? isStale(person.latest.age_seconds) : false;
             var row = document.createElement('div');
-            row.className = 'shared-legend-entry';
+            row.className = 'shared-legend-entry' + (stale ? ' stale' : '');
 
             var label = document.createElement('label');
             label.className = 'toggle-switch';
@@ -130,6 +149,12 @@
             row.appendChild(label);
             row.appendChild(swatch);
             row.appendChild(link);
+            if (stale) {
+                var staleBadge = document.createElement('span');
+                staleBadge.className = 'shared-stale-badge';
+                staleBadge.textContent = 'stale';
+                row.appendChild(staleBadge);
+            }
             legend.appendChild(row);
         });
     }
