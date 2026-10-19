@@ -409,6 +409,73 @@ def get_filtered_locations(userid, max_locations=10, min_distance_meters=91):
             break
     return filtered
 
+def get_filtered_locations_grouped(userids, max_locations=10, min_distance_meters=91):
+    """Fetch and filter locations for several users with ONE grouped query.
+
+    Applies exactly the :func:`get_filtered_locations` semantics per user
+    (newest first, drop a point closer than ``min_distance_meters`` to the
+    previously kept point, keep at most ``max_locations``) but after a single
+    query over every ``userid``. The number of queries therefore does not grow
+    with the number of users; the one-call design is about efficiency, not
+    rate limiting.
+    """
+    grouped = defaultdict(list)
+    if not userids:
+        return grouped
+    last_by_user = {}
+    rows = (LocationsModel.query
+            .filter(LocationsModel.userid.in_(list(userids)))
+            .order_by(LocationsModel.userid.asc(),
+                      LocationsModel.timestamp.desc())
+            .yield_per(100))
+    for loc in rows:
+        userid = loc.get_userid()
+        kept = grouped[userid]
+        if len(kept) >= max_locations:
+            continue
+        last = last_by_user.get(userid)
+        if last is not None:
+            dist = haversine_meters(last.get_lat(), last.get_lon(),
+                                    loc.get_lat(), loc.get_lon())
+            if dist < min_distance_meters:
+                continue
+        kept.append(loc)
+        last_by_user[userid] = loc
+    return grouped
+
+def get_shared_people(user_id):
+    """People who currently share their location with ``user_id``.
+
+    Fail-closed: the permitted set is exactly the ``sharing_permission`` rows
+    whose ``shared_with_id`` is ``user_id``. A user without such a row is never
+    returned, whatever other data exists. Display names come from a single
+    query over all permitted ids (never one query per person). Returns a list
+    of ``{'id', 'username', 'display_name'}`` sorted by username.
+    """
+    permissions = SharingPermissionModel.query.filter_by(shared_with_id=user_id).all()
+    owner_ids = []
+    usernames = {}
+    for permission in permissions:
+        owner_id = permission.get_data_owner_id()
+        if owner_id is None or owner_id in usernames:
+            continue
+        owner_ids.append(owner_id)
+        usernames[owner_id] = permission.get_data_owner_username()
+    display_names = {}
+    if owner_ids:
+        for data in UserDataModel.query.filter(UserDataModel.id.in_(owner_ids)).all():
+            full = ' '.join(part for part in (data.get_fname(), data.get_lname())
+                            if part).strip()
+            if full:
+                display_names[data.id] = full
+    people = [{
+        'id': owner_id,
+        'username': usernames[owner_id],
+        'display_name': display_names.get(owner_id, usernames[owner_id]),
+    } for owner_id in owner_ids]
+    people.sort(key=lambda person: person['username'])
+    return people
+
 def get_locations_for_date(userid, date_str):
     try:
         date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
@@ -785,6 +852,56 @@ def api_get_user_locations(map_username):
         }
     return {'locations': [], 'latest': None}
 
+@app.route('/api/locations/shared', methods=['GET'])
+@_api_login_required
+def api_get_shared_locations():
+    """Everyone who currently shares their location with the caller.
+
+    Fail-closed: the permitted set is exactly the ``sharing_permission`` rows
+    whose ``shared_with_id`` is the caller. A user with no such row never
+    appears, even if they have locations. The one-call shape is an efficiency
+    choice: the locations of every permitted person are fetched with a single
+    grouped query, so the query count does not grow with the number of sharers.
+    A permitted user with no locations is omitted, not shown as a broken marker.
+    """
+    id = current_user.get_id()
+    try:
+        people = get_shared_people(id)
+        if not people:
+            return {'people': []}
+
+        grouped = get_filtered_locations_grouped([p['id'] for p in people])
+
+        result = []
+        for person in people:
+            locations = grouped.get(person['id'])
+            if not locations:
+                # Permitted but no locations yet: simply absent.
+                continue
+            latest = locations[0]
+            result.append({
+                'username': person['username'],
+                'display_name': person['display_name'],
+                'latest': {
+                    'lat': latest.get_lat(),
+                    'lon': latest.get_lon(),
+                    'timestamp': format_timestamp(latest.get_timestamp()),
+                    'batt': latest.get_batt(),
+                    'ischarging': latest.get_ischarging(),
+                },
+                'trail': [{
+                    'lat': loc.get_lat(),
+                    'lon': loc.get_lon(),
+                    'timestamp': format_timestamp(loc.get_timestamp()),
+                } for loc in locations],
+            })
+        return {'people': result}
+    except Exception:
+        # Fail closed: never fall back to "show everything". The error is
+        # surfaced (HTTP 500 + message) rather than swallowed.
+        app.logger.exception('Failed to build shared locations for user %s', id)
+        return {'people': [], 'error': 'Could not load shared locations.'}, 500
+
 # Known Places API
 @app.route('/api/places', methods=['GET', 'POST', 'PUT', 'DELETE'])
 @_api_login_required
@@ -1024,6 +1141,25 @@ def map(map_username):
             return redirect('/dashboard')
     else:
         return redirect('/dashboard')
+
+@app.route('/map')
+@login_required
+def shared_map():
+    """The "everyone" map: one marker per person who shares with you.
+
+    Purely additive to the per-person ``/map/<username>`` view. The permitted
+    set comes only from ``sharing_permission`` rows where ``shared_with_id`` is
+    the caller (fail-closed); markers themselves are drawn from
+    ``/api/locations/shared`` and refreshed every 10s by ``shared_map.js``.
+    """
+    id = current_user.get_id()
+    username = UserModel.query.filter_by(id=id).first().get_username()
+    people = get_shared_people(id)
+    app.logger.info('%s opened the shared map (%d sharer(s))', username, len(people))
+    return render_template('shared_map.html',
+                           mapboxapi=app.config.get('MAPBOX_API_KEY', ''),
+                           people=people,
+                           username=username)
 
 @app.route('/speed')
 @login_required
