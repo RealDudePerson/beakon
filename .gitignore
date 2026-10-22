@@ -5,6 +5,11 @@ instance/
 config.cfg
 config.cfg.bak
 
+# Hosted Android companion app (12.8MB binary). This is a copy of the built APK
+# and must be refreshed when the app is rebuilt — see readme.md. Kept out of git
+# so the repository does not carry the binary.
+static/*.apk
+
 # ignore our virtual environment
 venv/
 .venv/

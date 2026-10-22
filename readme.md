@@ -101,3 +101,12 @@ The map automatically refreshes to check for new locations, but only recenters o
 
 ### Speedometer
 A speedometer view is available at `/speed` for visualizing current travel speed.
+
+### Android Companion App
+The top bar has an overflow ("⋮") menu with a **Download Android app** item that serves
+`static/scavenge-companion-debug.apk` from Beakon itself (no external host).
+
+> **Maintenance:** this file is a copy of the built APK. It must be refreshed whenever the
+> Android app is rebuilt, or the download silently goes stale. To update it, copy the new
+> build over `static/scavenge-companion-debug.apk` (the file is intentionally untracked in
+> git — see `.gitignore`).

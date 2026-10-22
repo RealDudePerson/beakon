@@ -58,6 +58,57 @@
   }
 }
 
+/* Overflow ("⋮") menu — a Foundation Dropdown anchored to the last nav item. */
+.topbar-responsive .overflow-menu {
+  position: relative;
+}
+
+.topbar-responsive .overflow-menu-button {
+  background: transparent;
+  border: 0;
+  color: #fefefe;
+  cursor: pointer;
+  font-size: 1.5rem;
+  line-height: 1;
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+}
+
+.topbar-responsive .overflow-menu-button:hover,
+.topbar-responsive .overflow-menu-button:focus {
+  color: #c6d1d8;
+}
+
+.topbar-responsive .overflow-menu-button:focus {
+  outline: 2px solid #c6d1d8;
+  outline-offset: 2px;
+}
+
+/* Match the dark top bar so the existing white .menu link colour stays legible. */
+.topbar-responsive .overflow-menu-pane {
+  width: auto;
+  min-width: 12rem;
+  padding: 0.5rem;
+  background-color: #2c3840;
+  border-color: #2c3840;
+  z-index: 1000;
+}
+
+.topbar-responsive .overflow-menu-pane .menu {
+  background: transparent;
+}
+
+.topbar-responsive .overflow-menu-pane .menu a {
+  color: #fefefe;
+  padding: 0.5rem 0.75rem;
+  white-space: nowrap;
+}
+
+.topbar-responsive .overflow-menu-pane .menu a:hover,
+.topbar-responsive .overflow-menu-pane .menu a:focus {
+  color: #c6d1d8;
+}
+
 @media screen and (max-width: 39.9375em) {
   .topbar-responsive {
     padding: 0.75rem;

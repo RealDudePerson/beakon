@@ -2,6 +2,7 @@ import logging
 import os
 import sys
 import math
+import mimetypes
 import random
 import re
 import ipaddress
@@ -22,6 +23,13 @@ from geofencing import check_geofences, haversine_meters
 
 # Define app
 app = Flask(__name__, template_folder='../templates', static_folder='../static', instance_path=os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'instance'))
+
+# The Android companion app is hosted as a static file and must be delivered as
+# an installer package. Some hosts' mime.types do not know .apk (or map it to
+# application/octet-stream), so pin the type rather than trusting the platform.
+# Verified: mimetypes already guesses this on the current host, but registering
+# it keeps the download correct everywhere. See static/scavenge-companion-debug.apk.
+mimetypes.add_type('application/vnd.android.package-archive', '.apk')
 
 def _default_config_path():
     project_root = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
