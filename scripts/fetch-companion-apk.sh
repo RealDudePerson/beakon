@@ -135,11 +135,11 @@ SIZE="$(manifest_value size)"
 SHA256="$(manifest_value sha256)"
 
 [ -n "$TAG" ] || die "companion-apk.txt ($MANIFEST) is missing the 'tag' key.
-  Expected a line like:  tag=companion-v1.0.0"
+  Expected a line like:  tag=<release tag>"
 [ -n "$FILENAME" ] || die "companion-apk.txt ($MANIFEST) is missing the 'filename' key.
   Expected a line like:  filename=beakon-companion-debug.apk"
 [ -n "$SIZE" ] || die "companion-apk.txt ($MANIFEST) is missing the 'size' key.
-  Expected a line like:  size=12785921"
+  Expected a line like:  size=<byte count>"
 [ -n "$SHA256" ] || die "companion-apk.txt ($MANIFEST) is missing the 'sha256' key.
   Expected a line like:  sha256=<64 hex chars>"
 

@@ -27,10 +27,32 @@ HTTPS = 'https://localhost'
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 APK_PATH = os.path.join(REPO_ROOT, 'static', 'beakon-companion-debug.apk')
 APK_URL = '/static/beakon-companion-debug.apk'
-APK_SIZE = 12785921
-APK_SHA256 = '50076393b0873ae2899c9e716be4922a6158b883d7ee009f2e94f7ba7e8c3c0f'
 APK_MIMETYPE = 'application/vnd.android.package-archive'
 APK_PACKAGE = 'com.beakon.companion'
+
+# ``companion-apk.txt`` is the single source of truth for which build an
+# instance serves. Read the pinned size and hash from it here instead of
+# hard-coding them, so bumping the app is a one-file edit and the test cannot
+# drift from the pin. ``scripts/fetch-companion-apk.sh`` reads the same file.
+MANIFEST_PATH = os.path.join(REPO_ROOT, 'companion-apk.txt')
+
+
+def _read_manifest(path=MANIFEST_PATH):
+    """Parse the key=value manifest at ``path`` into a dict."""
+    values = {}
+    with open(path) as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            key, _, value = line.partition('=')
+            values[key.strip()] = value.strip()
+    return values
+
+
+_PINNED_BUILD = _read_manifest()
+APK_SIZE = int(_PINNED_BUILD['size'])
+APK_SHA256 = _PINNED_BUILD['sha256'].lower()
 
 # The Scavenge hunter app is a *different* project (fruitsaladday.com). Serving
 # it from a Beakon instance was the original bug; it must be gone.

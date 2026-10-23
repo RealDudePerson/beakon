@@ -22,7 +22,8 @@ import threading
 
 import pytest
 
-# The pinned values the menu test hard-codes; companion-apk.txt must agree.
+# The pinned values are read from companion-apk.txt by the menu test; import
+# them (and the package constant) so both test files share one source of truth.
 from test_apk_download_menu import APK_PACKAGE, APK_SHA256, APK_SIZE  # noqa: E402
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -144,13 +145,25 @@ def test_script_exists_executable_and_has_a_valid_shebang():
     assert result.returncode == 0, result.stderr
 
 
-def test_manifest_parses_and_agrees_with_the_pinned_test_values():
+def test_manifest_is_well_formed():
+    """The committed manifest has every key and a plausible size and sha256.
+
+    This deliberately does *not* compare the manifest against ``APK_SIZE`` /
+    ``APK_SHA256``: those are now read *from* this file, so such a comparison
+    would be tautological (it would only ever test the file against itself).
+    The pin is checked against the real binary by
+    ``test_manifest_agrees_with_the_apk_that_is_actually_served`` and against
+    the real release by ``test_real_fetch_to_a_temp_destination``.
+    """
     manifest = _parse_manifest()
     for key in ('tag', 'filename', 'size', 'sha256'):
         assert manifest.get(key), 'companion-apk.txt is missing %r' % key
     assert manifest['filename'] == APK_FILENAME
-    assert int(manifest['size']) == APK_SIZE
-    assert manifest['sha256'].lower() == APK_SHA256
+    assert manifest['size'].isdigit(), manifest['size']
+    assert int(manifest['size']) > 0
+    sha = manifest['sha256'].lower()
+    assert len(sha) == 64, sha
+    int(sha, 16)  # raises if the sha256 is not hexadecimal
 
 
 def test_manifest_agrees_with_the_apk_that_is_actually_served():
@@ -315,13 +328,11 @@ def test_real_fetch_to_a_temp_destination(tmp_path):
         '-m "not network"\nstdout: %s\nstderr: %s'
         % (result.stdout, result.stderr))
     assert dest.is_file(), 'script reported success but produced no file'
+    # APK_SIZE and APK_SHA256 are read from companion-apk.txt, so these assert
+    # the real release asset matches the pin byte-for-byte. (Re-reading the
+    # manifest here would just repeat these lines.)
     assert dest.stat().st_size == APK_SIZE
     assert _sha256(dest) == APK_SHA256
-
-    # And the manifest agrees with what the release actually serves.
-    manifest = _parse_manifest()
-    assert int(manifest['size']) == dest.stat().st_size
-    assert manifest['sha256'].lower() == _sha256(dest)
 
     # The downloaded binary is the companion app, not some other APK.
     from test_apk_download_menu import _package_name_of
