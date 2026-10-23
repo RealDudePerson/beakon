@@ -50,6 +50,14 @@ for _handler in list(beakon_app.app.logger.handlers):
 HTTPS = 'https://localhost'
 
 
+def pytest_configure(config):
+    """Register custom markers so ``-m`` can select/deselect them."""
+    config.addinivalue_line(
+        'markers',
+        'network: talks to the real GitHub release; deselect with '
+        '-m "not network" when offline (it is never skipped silently)')
+
+
 @pytest.fixture(scope='session')
 def flask_app():
     return beakon_app.app

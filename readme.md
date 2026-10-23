@@ -34,6 +34,28 @@ Open https://localhost:5000 in your browser.
 
 To disable registration after creating your account, edit `config.cfg` and set `REGISTRATION_ENABLED = False`.
 
+## Deploying a fresh instance
+
+```bash
+git clone https://github.com/RealDudePerson/beakon.git
+cd beakon
+./setup.sh                                  # venv, deps, config, database
+./scripts/fetch-companion-apk.sh            # download + verify the companion APK
+source .venv/bin/activate
+python -c "import sys; sys.path.insert(0, 'src'); from app import app; app.run()"
+```
+
+The companion APK is a 12.8 MB binary that is deliberately **not** committed to
+git, so a fresh clone does not have it. `scripts/fetch-companion-apk.sh` downloads
+the pinned build from the public GitHub release, verifies its size and sha256
+against the tracked [`companion-apk.txt`](companion-apk.txt), and only then
+installs it at `static/beakon-companion-debug.apk`. **Without this step the top
+bar's "Download the Beakon app" menu item 404s.** No credentials are needed — the
+release is public. The script is idempotent (it skips a destination that already
+matches the pin) and never prints success unless the verified file is in place.
+
+`setup.sh` runs this step for you as part of an interactive setup.
+
 ### Threat Model
 This is completely built in my little spare time as a project to learn flask. This is my first flask project. This should not be used public facing, and if it is used public facing, disable registration once you have setup accounts.
 
@@ -107,16 +129,13 @@ The top bar has an overflow ("⋮") menu with a **Download the Beakon app** item
 Beakon's own companion app, `static/beakon-companion-debug.apk`, from Beakon itself (no
 external host).
 
-> **Maintenance:** this file is a copy of the APK built from the `~/projects/beakon-android`
-> project (package `com.beakon.companion`). It must be refreshed whenever that app is
-> rebuilt, or the download silently goes stale. To update it, copy the new build over
-> `static/beakon-companion-debug.apk`:
->
-> ```bash
-> cp ~/projects/beakon-android/app/build/outputs/apk/debug/app-debug.apk \
->    static/beakon-companion-debug.apk
-> ```
->
-> The file is intentionally untracked in git — see `.gitignore`. A **freshly cloned
-> instance will not have it**, so the download is only available on instances where the
-> copy step above has been performed.
+> **Maintenance:** the served file is a verified copy of the APK built from the
+> `~/projects/beakon-android` project (package `com.beakon.companion`). The build
+> to serve is pinned by [`companion-apk.txt`](companion-apk.txt) — tag, filename,
+> size and sha256 — and downloaded by `scripts/fetch-companion-apk.sh`. To ship a
+> new build: publish it as an asset on a new GitHub release, update
+> `companion-apk.txt` to the new tag/size/sha256, then re-run
+> `./scripts/fetch-companion-apk.sh`. Editing that one file is the only change
+> needed; the tag and hash are never duplicated in code. The APK itself stays
+> untracked in git — see `.gitignore` — so a **freshly cloned instance will not
+> have it** until it runs the fetch step above.

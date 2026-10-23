@@ -1,0 +1,10 @@
+# Pinned companion APK build — the single source of truth for which Android
+# app a Beakon instance serves. Bumping the app means editing this one file;
+# scripts/fetch-companion-apk.sh reads it, so the tag, filename, size and hash
+# are never duplicated in code.
+#
+# Format: one key=value per line. Blank lines and #-comments are ignored.
+tag=companion-v1.0.0
+filename=beakon-companion-debug.apk
+size=12785921
+sha256=50076393b0873ae2899c9e716be4922a6158b883d7ee009f2e94f7ba7e8c3c0f
