@@ -28,7 +28,7 @@ app = Flask(__name__, template_folder='../templates', static_folder='../static',
 # an installer package. Some hosts' mime.types do not know .apk (or map it to
 # application/octet-stream), so pin the type rather than trusting the platform.
 # Verified: mimetypes already guesses this on the current host, but registering
-# it keeps the download correct everywhere. See static/scavenge-companion-debug.apk.
+# it keeps the download correct everywhere. See static/beakon-companion-debug.apk.
 mimetypes.add_type('application/vnd.android.package-archive', '.apk')
 
 def _default_config_path():

@@ -103,10 +103,20 @@ The map automatically refreshes to check for new locations, but only recenters o
 A speedometer view is available at `/speed` for visualizing current travel speed.
 
 ### Android Companion App
-The top bar has an overflow ("⋮") menu with a **Download Android app** item that serves
-`static/scavenge-companion-debug.apk` from Beakon itself (no external host).
+The top bar has an overflow ("⋮") menu with a **Download the Beakon app** item that serves
+Beakon's own companion app, `static/beakon-companion-debug.apk`, from Beakon itself (no
+external host).
 
-> **Maintenance:** this file is a copy of the built APK. It must be refreshed whenever the
-> Android app is rebuilt, or the download silently goes stale. To update it, copy the new
-> build over `static/scavenge-companion-debug.apk` (the file is intentionally untracked in
-> git — see `.gitignore`).
+> **Maintenance:** this file is a copy of the APK built from the `~/projects/beakon-android`
+> project (package `com.beakon.companion`). It must be refreshed whenever that app is
+> rebuilt, or the download silently goes stale. To update it, copy the new build over
+> `static/beakon-companion-debug.apk`:
+>
+> ```bash
+> cp ~/projects/beakon-android/app/build/outputs/apk/debug/app-debug.apk \
+>    static/beakon-companion-debug.apk
+> ```
+>
+> The file is intentionally untracked in git — see `.gitignore`. A **freshly cloned
+> instance will not have it**, so the download is only available on instances where the
+> copy step above has been performed.

@@ -5,9 +5,10 @@ instance/
 config.cfg
 config.cfg.bak
 
-# Hosted Android companion app (12.8MB binary). This is a copy of the built APK
-# and must be refreshed when the app is rebuilt — see readme.md. Kept out of git
-# so the repository does not carry the binary.
+# Beakon's own hosted Android companion app (12.8MB binary). This is a copy of
+# the built APK from ~/projects/beakon-android and must be refreshed when that
+# app is rebuilt — see readme.md. Kept out of git so the repository does not
+# carry the binary. Note: a freshly cloned instance therefore does NOT have it.
 static/*.apk
 
 # ignore our virtual environment
