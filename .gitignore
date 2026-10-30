@@ -4,6 +4,7 @@ instance/
 # ignore generated config (contains SECRET_KEY and MAPBOX_API_KEY)
 config.cfg
 config.cfg.bak
+config.cfg.bak.*
 
 # Beakon's own hosted Android companion app (12.8MB binary). This is a copy of
 # the built APK from ~/projects/beakon-android and must be refreshed when that
