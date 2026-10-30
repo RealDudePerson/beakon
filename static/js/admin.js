@@ -49,6 +49,36 @@ function deleteUser(id) {
     }
 }
 
+function openResetPasswordModal(id) {
+    document.getElementById('reset-password-user-id').value = id;
+    document.getElementById('reset-password-input').value = '';
+    var errorEl = document.getElementById('reset-password-error');
+    errorEl.textContent = '';
+    errorEl.style.display = 'none';
+    $('#reset-password-modal').foundation('open');
+}
+
+function resetPassword() {
+    var id = document.getElementById('reset-password-user-id').value;
+    var password = document.getElementById('reset-password-input').value;
+    fetch('/admin/users/' + id + '/reset-password', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({password: password})
+    }).then(res => res.json().catch(function () { return {}; })
+        .then(function (data) { return {ok: res.ok, data: data}; }))
+    .then(function (result) {
+        if (result.ok) {
+            $('#reset-password-modal').foundation('close');
+            alert('Password reset');
+        } else {
+            var errorEl = document.getElementById('reset-password-error');
+            errorEl.textContent = result.data.error || 'Error resetting password';
+            errorEl.style.display = '';
+        }
+    });
+}
+
 function openEditModal(id) {
     var user = adminUsers.find(function(u) { return u.id === id; });
     if (!user) return;
@@ -93,6 +123,10 @@ document.addEventListener('DOMContentLoaded', function () {
     if (saveBtn) {
         saveBtn.addEventListener('click', saveUser);
     }
+    var confirmResetBtn = document.getElementById('confirm-reset-password-btn');
+    if (confirmResetBtn) {
+        confirmResetBtn.addEventListener('click', resetPassword);
+    }
 
     var table = document.getElementById('admin-users-table');
     if (table) {
@@ -105,6 +139,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 openEditModal(id);
             } else if (action === 'reset-token') {
                 resetToken(id);
+            } else if (action === 'reset-password') {
+                openResetPasswordModal(id);
             } else if (action === 'delete') {
                 deleteUser(id);
             }

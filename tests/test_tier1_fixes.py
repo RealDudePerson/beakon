@@ -4,6 +4,7 @@ Each test maps to an acceptance criterion and is written so that
 re-introducing the original bug makes it fail.
 """
 
+import logging
 import os
 
 import pytest
@@ -517,3 +518,136 @@ def test_login_and_dashboard_happy_path(flask_app):
     make_user(flask_app, 'plain_user')
     client = login(flask_app, 'plain_user')
     assert client.get('/dashboard', base_url=HTTPS).status_code == 200
+
+
+# --------------------------------------------------------------------------
+# Admin password reset (REQUIREMENTS-ADMIN-PASSWORD-RESET.md)
+# --------------------------------------------------------------------------
+def _reset_password(flask_app, admin_username, target_id, password):
+    client = login(flask_app, admin_username)
+    return client.post('/admin/users/%d/reset-password' % target_id,
+                       json={'password': password}, base_url=HTTPS)
+
+
+def _login_attempt(flask_app, username, password):
+    return flask_app.test_client().post(
+        '/login', data={'username': username, 'password': password},
+        base_url=HTTPS)
+
+
+def test_admin_reset_password_target_logs_in_with_new_password(flask_app):
+    make_user(flask_app, 'pwreset_admin_a1', is_admin=True)
+    target = make_user(flask_app, 'pwreset_target_a1')
+
+    resp = _reset_password(flask_app, 'pwreset_admin_a1', target,
+                           'newpassword456')
+    assert resp.status_code == 200, resp.data
+
+    relogin = _login_attempt(flask_app, 'pwreset_target_a1', 'newpassword456')
+    assert relogin.status_code in (301, 302, 303), relogin.status_code
+
+
+def test_admin_reset_password_old_password_stops_working(flask_app):
+    make_user(flask_app, 'pwreset_admin_a2', is_admin=True)
+    target = make_user(flask_app, 'pwreset_target_a2', password='oldpassword123')
+
+    assert _reset_password(flask_app, 'pwreset_admin_a2', target,
+                           'newpassword456').status_code == 200
+
+    stale = _login_attempt(flask_app, 'pwreset_target_a2', 'oldpassword123')
+    assert stale.status_code not in (301, 302, 303), stale.status_code
+
+
+def test_admin_reset_password_non_admin_forbidden_and_unchanged(flask_app):
+    make_user(flask_app, 'pwreset_plain_a3')
+    target = make_user(flask_app, 'pwreset_target_a3', password='oldpassword123')
+
+    resp = _reset_password(flask_app, 'pwreset_plain_a3', target,
+                           'newpassword456')
+    assert resp.status_code == 403, resp.status_code
+
+    with flask_app.app_context():
+        user = UserModel.query.filter_by(username='pwreset_target_a3').first()
+        assert user.check_password('oldpassword123') is True
+
+
+def test_admin_reset_password_short_password_rejected_and_unchanged(flask_app):
+    make_user(flask_app, 'pwreset_admin_a4', is_admin=True)
+    target = make_user(flask_app, 'pwreset_target_a4', password='oldpassword123')
+
+    resp = _reset_password(flask_app, 'pwreset_admin_a4', target, 'short')
+    assert resp.status_code == 400, resp.status_code
+    assert b'at least' in resp.data.lower()
+
+    with flask_app.app_context():
+        user = UserModel.query.filter_by(username='pwreset_target_a4').first()
+        assert user.check_password('oldpassword123') is True
+
+
+def test_admin_reset_password_missing_password_returns_400(flask_app):
+    make_user(flask_app, 'pwreset_admin_a5', is_admin=True)
+    target = make_user(flask_app, 'pwreset_target_a5')
+
+    client = login(flask_app, 'pwreset_admin_a5')
+    resp = client.post('/admin/users/%d/reset-password' % target,
+                       json={}, base_url=HTTPS)
+    assert resp.status_code == 400, resp.status_code
+    assert b'password' in resp.data.lower()
+
+
+def test_admin_reset_password_unknown_user_returns_404(flask_app):
+    make_user(flask_app, 'pwreset_admin_a6', is_admin=True)
+
+    resp = _reset_password(flask_app, 'pwreset_admin_a6', 999999,
+                           'newpassword456')
+    assert resp.status_code == 404, resp.status_code
+
+
+def test_admin_can_reset_another_admins_password(flask_app):
+    make_user(flask_app, 'pwreset_admin_a7', is_admin=True)
+    other = make_user(flask_app, 'pwreset_admin_b7', is_admin=True,
+                      password='oldpassword123')
+
+    assert _reset_password(flask_app, 'pwreset_admin_a7', other,
+                           'newpassword456').status_code == 200
+
+    relogin = _login_attempt(flask_app, 'pwreset_admin_b7', 'newpassword456')
+    assert relogin.status_code in (301, 302, 303), relogin.status_code
+
+
+def test_admin_reset_password_response_does_not_echo_password(flask_app):
+    make_user(flask_app, 'pwreset_admin_a8', is_admin=True)
+    target = make_user(flask_app, 'pwreset_target_a8')
+
+    resp = _reset_password(flask_app, 'pwreset_admin_a8', target,
+                           'do-not-echo-this-1')
+    assert resp.status_code == 200
+    assert 'do-not-echo-this-1' not in resp.get_data(as_text=True)
+
+
+def test_admin_reset_password_logs_both_accounts(flask_app, caplog):
+    make_user(flask_app, 'pwreset_admin_a9', is_admin=True)
+    target = make_user(flask_app, 'pwreset_target_a9')
+
+    with caplog.at_level(logging.INFO):
+        resp = _reset_password(flask_app, 'pwreset_admin_a9', target,
+                               'newpassword456')
+    assert resp.status_code == 200
+
+    assert ('pwreset_admin_a9 reset the password for pwreset_target_a9'
+            in caplog.text)
+    # The audit trail must never carry the credential itself.
+    assert 'newpassword456' not in caplog.text
+
+
+def test_admin_page_reset_password_button_only_for_admins(flask_app):
+    make_user(flask_app, 'pwreset_ui_admin', is_admin=True)
+    make_user(flask_app, 'pwreset_ui_plain')
+
+    admin_client = login(flask_app, 'pwreset_ui_admin')
+    html = admin_client.get('/admin', base_url=HTTPS).get_data(as_text=True)
+    assert 'data-action="reset-password"' in html
+    assert 'id="reset-password-modal"' in html
+
+    plain_client = login(flask_app, 'pwreset_ui_plain')
+    assert plain_client.get('/admin', base_url=HTTPS).status_code == 403

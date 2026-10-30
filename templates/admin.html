@@ -43,6 +43,7 @@
             <td data-label="Actions">
               <button class="button small" type="button" data-action="edit" data-user-id="{{user.id}}">Edit</button>
               <button class="button small secondary" type="button" data-action="reset-token" data-user-id="{{user.id}}">Reset Token</button>
+              <button class="button small secondary" type="button" data-action="reset-password" data-user-id="{{user.id}}">Reset Password</button>
               <button class="button small alert" type="button" data-action="delete" data-user-id="{{user.id}}">Delete</button>
             </td>
           </tr>
@@ -62,6 +63,15 @@
   <label>Last Name <input type="text" id="user-lname"></label>
   <label><input type="checkbox" id="user-is-admin"> Is Admin</label>
   <button class="button" id="save-user-btn" type="button">Save</button>
+  <button class="close-button" data-close aria-label="Close modal" type="button"><span aria-hidden="true">&times;</span></button>
+</div>
+
+<div class="reveal" id="reset-password-modal" data-reveal>
+  <h4>Reset Password</h4>
+  <input type="hidden" id="reset-password-user-id">
+  <label>New Password <input type="password" id="reset-password-input"></label>
+  <div class="callout alert" id="reset-password-error" style="display: none;"></div>
+  <button class="button" id="confirm-reset-password-btn" type="button">Reset Password</button>
   <button class="close-button" data-close aria-label="Close modal" type="button"><span aria-hidden="true">&times;</span></button>
 </div>
 

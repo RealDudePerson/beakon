@@ -1352,6 +1352,24 @@ def admin_reset_token(user_id):
     db.session.commit()
     return {'token': new_token}, 200
 
+@app.route('/admin/users/<int:user_id>/reset-password', methods=['POST'])
+@login_required
+@admin_required
+def admin_reset_password(user_id):
+    user = UserModel.query.get(user_id)
+    if not user:
+        return {'error': 'User not found'}, 404
+    data = request.get_json(silent=True) or {}
+    password = data.get('password')
+    if not password:
+        return {'error': 'password is required'}, 400
+    if len(password) < MIN_PASSWORD_LENGTH:
+        return {'error': 'Password must be at least %d characters.' % MIN_PASSWORD_LENGTH}, 400
+    user.set_password(password)
+    db.session.commit()
+    app.logger.info('%s reset the password for %s', current_user.get_username(), user.get_username())
+    return {'status': 'ok'}, 200
+
 @app.route('/admin/users/<int:user_id>/delete', methods=['POST'])
 @login_required
 @admin_required
