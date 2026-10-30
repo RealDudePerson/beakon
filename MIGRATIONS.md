@@ -18,6 +18,10 @@ these instructions are for a database that already has data in it.
   existing one is brought forward by running the files in `migrations/` by hand, in order.
 - **Migrations are one-way.** There are no down-migrations. Rolling back means restoring
   your backup.
+- **Check what your clients do with unknown fields before you update the server.** The
+  timestamp work adds a field to the location responses. A client that ignores unknown JSON
+  fields is unaffected; one that rejects them breaks the moment the server updates, with no
+  error on the server side at all. See section 4.
 
 ## 1. Back up
 
@@ -107,16 +111,35 @@ sqlite3 instance/beakon.db < migrations/001_known_places_webhook_columns.sql
 sqlite3 instance/beakon.db < migrations/002_known_places_include_coords_in_webhook.sql
 python  migrations/003_users_autoincrement.py
 sqlite3 instance/beakon.db < migrations/004_locations_lat_lon_index.sql
+python  migrations/005_timestamps_unix_epoch.py --timezone <your-host-zone>
 
-# 4. Confirm the schema matches what the code expects
+# 4. Give the query planner statistics, or the index from 004 will not be chosen
+sqlite3 instance/beakon.db "ANALYZE;"
+
+# 5. Confirm the schema matches what the code expects
 sqlite3 instance/beakon.db ".schema users"
 sqlite3 instance/beakon.db ".schema known_places"
 
-# 5. Start it again and watch the log
+# 6. Start it again and watch the log
 systemctl --user start beakon.service
 systemctl --user status  beakon.service
 tail -f instance/logs/beakon.log
 ```
+
+Three things about that order:
+
+- **`--timezone` is the decision from section 4.** Pass it explicitly rather than letting the
+  host zone be used silently, so the choice is recorded in your shell history.
+- **004 and 005 can be run in either order.** 005 rebuilds `locations_table` and replays every
+  index it finds, so it preserves the index 004 creates; and 004 is
+  `CREATE INDEX IF NOT EXISTS`, so it is happy either way. Oldest-first is still the
+  convention.
+- **Do not skip step 4.** Without `ANALYZE` the planner has no statistics and will not use
+  the lat/lon index for the Presence prefilter — it falls back to scanning by user, which is
+  the cost the index exists to remove. See section 6.
+
+Before step 6, read section 4's note on client compatibility: if your instance serves an
+Android build older than v1.2, updating the server will break that app.
 
 Then load the app and check the pages that read each affected table: the location list, a
 history view, and the known-places page.
@@ -184,6 +207,17 @@ only consequence is that a location older than a day loses the sub-second part o
 `timestamp` display string (`2026-10-23 18:47:40.278027` becomes `2026-10-23 18:47:40`).
 `timestamp_unix` in the API is, as before, a whole integer.
 
+**Your clients must tolerate an unknown field.** The location responses now carry
+`timestamp_unix` alongside `timestamp`. The change is additive, so a client that ignores
+unknown JSON fields is completely unaffected — but a client that *rejects* them throws on the
+new key, breaks its location view, and produces **no server-side error at all**, so the server
+log looks healthy while the app is broken. Beakon's own Android app only ignores unknown fields
+from **v1.2** onward (`ignoreUnknownKeys` in `BeakonClient.kt`), so an instance serving an older
+pinned APK — `companion-v1.0.2`, for example — will break that app the moment the server is
+updated. Check the pin in `companion-apk.txt` and get the app to v1.2 or later first, or update
+the server and the pin together. Newer builds are unaffected in either direction, because the
+app falls back to `timestamp` when `timestamp_unix` is absent.
+
 **A fresh install** gets the same schema from `db.create_all()` and writes epoch from the
 start, so new and migrated databases agree.
 
@@ -211,8 +245,23 @@ sqlite3 instance/beakon.db "SELECT COUNT(*) FROM users;"
 # For an epoch migration: the column is numeric and in a sane range
 sqlite3 instance/beakon.db "SELECT typeof(timestamp), MIN(timestamp), MAX(timestamp) FROM locations_table;"
 sqlite3 instance/beakon.db "SELECT datetime(MIN(timestamp),'unixepoch'), datetime(MAX(timestamp),'unixepoch') FROM locations_table;"
+
+# The date filter is the one that fails SILENTLY — check it, not just the column type.
+# Pick a day you know has rows and confirm it returns them. With text data and new
+# code this returns 0, and the page just looks empty. Adjust the bounds to your zone.
+sqlite3 instance/beakon.db "SELECT COUNT(*) FROM locations_table
+  WHERE timestamp >= strftime('%s','2026-10-20 00:00:00')
+    AND timestamp <  strftime('%s','2026-10-21 00:00:00');"
+
+# The lat/lon index is actually reachable (this needs ANALYZE to have been run).
+# Expect: SEARCH locations_table USING INDEX idx_locations_lat_lon (lat>? AND lat<?)
+# If it says ix_locations_table_userid instead, the planner has no statistics.
+sqlite3 instance/beakon.db "EXPLAIN QUERY PLAN SELECT count(*) FROM locations_table
+  WHERE userid=1 AND lat>=37.7 AND lat<=37.8 AND lon>=-122.5 AND lon<=-122.4;"
 ```
 
-The last query converts the extremes back to readable UTC — if those dates do not match the
-oldest and newest records you expect, the timezone decision in section 4 was the wrong one,
-and you should restore the backup and redo it.
+The `datetime(...,'unixepoch')` query converts the extremes back to readable UTC — if those
+dates do not match the oldest and newest records you expect, the timezone decision in section 4
+was the wrong one, and you should restore the backup and redo it. If the `EXPLAIN QUERY PLAN`
+check names `ix_locations_table_userid` instead of `idx_locations_lat_lon`, run
+`sqlite3 instance/beakon.db "ANALYZE;"` and check again.
