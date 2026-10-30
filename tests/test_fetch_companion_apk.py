@@ -32,6 +32,12 @@ MANIFEST = os.path.join(REPO_ROOT, 'companion-apk.txt')
 APK_PATH = os.path.join(REPO_ROOT, 'static', 'beakon-companion-debug.apk')
 APK_FILENAME = 'beakon-companion-debug.apk'
 
+# The manifest's ``filename`` is the *upstream* release asset name published by
+# the Android app's own repo, which is not the same as the destination name the
+# server serves (``APK_FILENAME`` above). Assert against the upstream name here;
+# keep APK_FILENAME as the name the script installs to.
+APK_UPSTREAM_FILENAME = 'beakon-companion-1.4-release.apk'
+
 
 # --------------------------------------------------------------------------
 # Helpers
@@ -158,7 +164,7 @@ def test_manifest_is_well_formed():
     manifest = _parse_manifest()
     for key in ('tag', 'filename', 'size', 'sha256'):
         assert manifest.get(key), 'companion-apk.txt is missing %r' % key
-    assert manifest['filename'] == APK_FILENAME
+    assert manifest['filename'] == APK_UPSTREAM_FILENAME
     assert manifest['size'].isdigit(), manifest['size']
     assert int(manifest['size']) > 0
     sha = manifest['sha256'].lower()

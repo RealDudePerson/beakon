@@ -4,6 +4,10 @@ Repo: `~/projects/beakon` (branch **`master`** — NOT `main`). 76 tests passing
 
 ## Context — already done, verified
 
+> **Superseded (v1.4).** The APK now comes from the app's own public repository,
+> `RealDudePerson/beakon-android`, and is pinned in `companion-apk.txt`. The release,
+> URL and hashes below record the original setup and are kept as history.
+
 The companion APK is now published as a **GitHub release asset** and confirmed downloadable
 **anonymously** (the repo is public, so no credentials are needed):
 

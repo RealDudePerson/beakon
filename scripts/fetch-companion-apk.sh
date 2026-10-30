@@ -22,7 +22,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Repository whose releases host the asset, and the default asset base URL.
-REPO_SLUG="${BEAKON_APK_REPO_SLUG:-RealDudePerson/beakon}"
+REPO_SLUG="${BEAKON_APK_REPO_SLUG:-RealDudePerson/beakon-android}"
 DEFAULT_BASE_URL="${BEAKON_APK_BASE_URL:-https://github.com/${REPO_SLUG}/releases/download}"
 
 DEFAULT_MANIFEST="$REPO_ROOT/companion-apk.txt"

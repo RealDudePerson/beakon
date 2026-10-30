@@ -4,7 +4,7 @@
 # are never duplicated in code.
 #
 # Format: one key=value per line. Blank lines and #-comments are ignored.
-tag=companion-v1.0.2
-filename=beakon-companion-debug.apk
-size=9112373
-sha256=b42bc8dd48072c8fd86a9d43b5343e3712b752c5735c85235160027bb3331da1
+tag=v1.4
+filename=beakon-companion-1.4-release.apk
+size=9128901
+sha256=f18c576a988fbe9e1fb06be3f91d551700a9b6396466d6a0bfbfe1b5e59f1c42

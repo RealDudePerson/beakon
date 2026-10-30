@@ -141,8 +141,9 @@ external host).
 > **Maintenance:** the served file is a verified copy of the APK built from the
 > `~/projects/beakon-android` project (package `com.beakon.companion`). The build
 > to serve is pinned by [`companion-apk.txt`](companion-apk.txt) — tag, filename,
-> size and sha256 — and downloaded by `scripts/fetch-companion-apk.sh`. To ship a
-> new build: publish it as an asset on a new GitHub release, update
+> size and sha256 — and downloaded by `scripts/fetch-companion-apk.sh` from the
+> app's own public GitHub releases (`RealDudePerson/beakon-android`). To ship a
+> new build: publish it as an asset on a new GitHub release in that repo, update
 > `companion-apk.txt` to the new tag/size/sha256, then re-run
 > `./scripts/fetch-companion-apk.sh`. Editing that one file is the only change
 > needed; the tag and hash are never duplicated in code. The APK itself stays
