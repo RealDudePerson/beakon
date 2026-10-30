@@ -56,6 +56,15 @@ matches the pin) and never prints success unless the verified file is in place.
 
 `setup.sh` runs this step for you as part of an interactive setup.
 
+## Upgrading an existing instance
+
+Migrations are **not** applied automatically, and a database that already holds data is
+brought forward by hand. See **[MIGRATIONS.md](MIGRATIONS.md)** for the backup procedure,
+how to run each file in `migrations/` in place, the full
+stop → back up → migrate → verify → restart sequence, and how to move the stored timestamps
+to Unix epoch — including the timezone decision that has to be made before that one, and the
+matching code change it requires.
+
 ### Threat Model
 This is completely built in my little spare time as a project to learn flask. This is my first flask project. This should not be used public facing, and if it is used public facing, disable registration once you have setup accounts.
 
