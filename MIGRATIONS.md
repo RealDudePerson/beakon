@@ -63,6 +63,14 @@ Both are `ALTER TABLE ... ADD COLUMN`, which SQLite supports in place. Running o
 fails with "duplicate column name" and changes nothing — that failure is harmless, it just
 means it is already applied.
 
+`migrations/004_locations_lat_lon_index.sql` is the same kind of additive migration: it
+creates `idx_locations_lat_lon (lat, lon)`, the bounding-box index used by the Presence
+search prefilter. It is `CREATE INDEX IF NOT EXISTS`, so running it twice is a clean no-op.
+
+```sh
+sqlite3 instance/beakon.db < migrations/004_locations_lat_lon_index.sql
+```
+
 **Table rebuilds — Python scripts.** SQLite cannot change a column type, add
 `AUTOINCREMENT`, or drop a constraint with `ALTER TABLE`, so those migrations rebuild the
 table: create a new one, copy every row, drop the old, rename the new.
@@ -98,6 +106,7 @@ systemctl --user stop beakon.service
 sqlite3 instance/beakon.db < migrations/001_known_places_webhook_columns.sql
 sqlite3 instance/beakon.db < migrations/002_known_places_include_coords_in_webhook.sql
 python  migrations/003_users_autoincrement.py
+sqlite3 instance/beakon.db < migrations/004_locations_lat_lon_index.sql
 
 # 4. Confirm the schema matches what the code expects
 sqlite3 instance/beakon.db ".schema users"

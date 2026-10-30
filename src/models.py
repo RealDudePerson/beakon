@@ -64,6 +64,7 @@ class LocationsModel(db.Model):
 
     __table_args__ = (
         db.Index('idx_userid_timestamp', 'userid', 'timestamp'),
+        db.Index('idx_locations_lat_lon', 'lat', 'lon'),
     )
 
     def set_lat(self, lat):

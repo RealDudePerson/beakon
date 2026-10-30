@@ -1329,9 +1329,43 @@ def admin_delete_user(user_id):
 
 # Presence search: "when was this person within radius R of point P recently?"
 # Returns the 10 most recent calendar days on which the person logged at least one
-# location inside the circle, however far back that spans. Streaming DESC with early
-# exit at 10 hit-days; worst case reads the user's whole history once.
+# location inside the circle, however far back that spans.
+#
+# Two query strategies, chosen by how many points fall in the circle's bounding box:
+#   * sparse areas -> fetch only the bbox rows via idx_locations_lat_lon and
+#     exact-test them (previously a point the user rarely visits scanned the whole
+#     history before finding 10 hit-days).
+#   * dense areas  -> keep the timestamp-DESC early-exit scan, which finds 10 hit-days
+#     in a few thousand rows. Routing avoids the large ORDER BY sort a bbox query needs.
 PRESENCE_DAYS = 10
+PRESENCE_BBOX_LIMIT = 100000
+
+def _presence_bbox(lat, lon, radius):
+    lat_delta = radius / 111320.0
+    cos_lat = math.cos(math.radians(lat))
+    lon_delta = 180.0 if abs(cos_lat) < 1e-6 else radius / (111320.0 * cos_lat)
+    return (lat - lat_delta, lat + lat_delta,
+            max(-180.0, lon - lon_delta), min(180.0, lon + lon_delta))
+
+def _collect_presence_days(query, lat, lon, radius):
+    days = {}
+    for loc in query:
+        if loc.lat is None or loc.lon is None:
+            continue
+        if haversine_meters(lat, lon, loc.lat, loc.lon) >= radius:
+            continue
+        day = loc.timestamp.date()
+        if day not in days:
+            if len(days) >= PRESENCE_DAYS:
+                break
+            days[day] = {'date': day.isoformat(), 'hits': 0,
+                         'first': loc.timestamp, 'last': loc.timestamp,
+                         'last_lat': loc.lat, 'last_lon': loc.lon}
+        entry = days[day]
+        entry['hits'] += 1
+        entry['first'] = min(entry['first'], loc.timestamp)
+        entry['last'] = max(entry['last'], loc.timestamp)
+    return days
 
 @app.route('/presence')
 @login_required
@@ -1368,26 +1402,25 @@ def api_presence():
         if has_permission is None:
             return {'error': 'Permission denied'}, 403
 
-    days = {}
-    for loc in (LocationsModel.query
-                .filter_by(userid=map_user.get_id())
-                .order_by(LocationsModel.timestamp.desc())
-                .yield_per(100)):
-        if loc.lat is None or loc.lon is None:
-            continue
-        if haversine_meters(lat, lon, loc.lat, loc.lon) >= radius:
-            continue
-        day = loc.timestamp.date()
-        if day not in days:
-            if len(days) >= PRESENCE_DAYS:
-                break
-            days[day] = {'date': day.isoformat(), 'hits': 0,
-                         'first': loc.timestamp, 'last': loc.timestamp,
-                         'last_lat': loc.lat, 'last_lon': loc.lon}
-        entry = days[day]
-        entry['hits'] += 1
-        entry['first'] = min(entry['first'], loc.timestamp)
-        entry['last'] = max(entry['last'], loc.timestamp)
+    userid = map_user.get_id()
+    min_lat, max_lat, min_lon, max_lon = _presence_bbox(lat, lon, radius)
+    bbox_query = LocationsModel.query.filter(
+        LocationsModel.userid == userid,
+        LocationsModel.lat >= min_lat,
+        LocationsModel.lat <= max_lat,
+        LocationsModel.lon >= min_lon,
+        LocationsModel.lon <= max_lon,
+    )
+    bbox_count = bbox_query.limit(PRESENCE_BBOX_LIMIT + 1).count()
+
+    if bbox_count <= PRESENCE_BBOX_LIMIT:
+        locations = bbox_query.order_by(LocationsModel.timestamp.desc())
+    else:
+        locations = (LocationsModel.query
+                     .filter_by(userid=userid)
+                     .order_by(LocationsModel.timestamp.desc()))
+
+    days = _collect_presence_days(locations.yield_per(100), lat, lon, radius)
 
     result = [{'date': e['date'], 'hits': e['hits'],
                'first': e['first'].strftime('%Y-%m-%d %H:%M:%S'),
