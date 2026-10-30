@@ -69,9 +69,12 @@ It must accept:
 - `str` → parsed, then treated as local;
 - `None` → `None`.
 
-**Why this matters:** it makes the code work both *before* and *after* the data migration, so
-the deployment order cannot break the app. Without it, deploying the new code against an old
-database (or vice versa) breaks every timestamp read.
+**Why this matters:** it keeps per-row rendering working against both formats, so a mistake in
+sequencing degrades rather than corrupts. It is **not** a licence to deploy the code without
+the data: two SQL-level comparisons still run against the raw column and SQLite sorts TEXT
+above numbers, so with new code and text data the day-range filter silently matches nothing
+(measured: 0 rows for 2026-10-20 against text, 789 after the migration). See the correction in
+`MIGRATIONS.md`.
 
 Writers use one helper too: `now_epoch()` → `int(datetime.now().timestamp())`.
 
@@ -147,13 +150,17 @@ The app must work against **both** an old server (no `timestamp_unix`) and a new
   would work without this — but a migrated database should not carry a schema that disagrees
   with a fresh one). The `idx_userid_timestamp` index must be recreated.
 
-### 8. Upgrade procedure (safe, order-independent)
+### 8. Upgrade procedure
+
+**The code and the data must change together.** Not "deploy the code first": with new code and
+text data the day-range filter silently returns nothing (measured above), and with old code and
+integer data timestamps raise `TypeError`. Either half-state is broken, so close the window:
 
 1. Back up (see `MIGRATIONS.md`).
-2. Deploy the code. It reads both formats, so this is safe against the un-migrated database.
-3. Run the migration with the service stopped, or with it running — the tolerant reader means
-   neither order is destructive. Stopping is still recommended for the table rebuild.
-4. Verify (section 9). Rollback is restoring the backup.
+2. Stop the service.
+3. Run the migration.
+4. Start the service on the new code.
+5. Verify (section 9). Rollback is restoring the backup.
 
 ## Acceptance criteria
 

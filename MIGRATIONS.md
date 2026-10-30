@@ -162,9 +162,21 @@ keys and the declared type before reporting success. It is transactional: a fail
 back. Re-running it is a clean no-op.
 
 **The application code changed with it.** `to_epoch()` in `src/models.py` accepts an integer,
-a `datetime`, or text, and every read goes through it — which is what makes the upgrade safe
-in either order: the new code reads a migrated *and* an unmigrated database, so deploying the
-code before or after the migration cannot break timestamps. The writers use `now_epoch()`.
+a `datetime`, or text, and every *read* goes through it, so per-row rendering works against a
+migrated and an unmigrated database alike. The writers use `now_epoch()`.
+
+**But the code and the data must change together — do not deploy one without the other.**
+Two SQL-level comparisons still run against the raw column, and SQLite sorts TEXT above
+numbers, so a half-done upgrade breaks them:
+
+| State | What breaks |
+|---|---|
+| New code, text data | The day-range filter matches nothing. Measured on the live data: the filter for 2026-10-20 returns **0 rows** against text and **789** after the migration. The prune cutoff also silently stops matching. |
+| Old code, integer data | `datetime.now() - <int>` raises `TypeError`, so timestamps stop rendering at all. |
+
+So the sequence is: **stop the service, migrate the data, start the service.** Not "deploy the
+code first" — that leaves the date filter quietly returning nothing, which is worse than an
+error because it looks like there is simply no data.
 
 **Stored values are whole integer seconds.** The converter truncates toward zero, so every
 row — including one whose source text carried microseconds — becomes an INTEGER epoch. The
