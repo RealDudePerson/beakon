@@ -131,7 +131,7 @@ The app must work against **both** an old server (no `timestamp_unix`) and a new
 
 ### 7. Migration
 
-`migrations/004_timestamps_unix_epoch.py`, following the conventions of
+`migrations/005_timestamps_unix_epoch.py`, following the conventions of
 `003_users_autoincrement.py`:
 
 - positional db path argument, defaulting to `instance/beakon.db`;

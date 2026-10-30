@@ -1,9 +1,105 @@
+import os
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin, LoginManager
 
 login = LoginManager()
 db = SQLAlchemy()
+
+# Timestamps are stored as Unix epoch seconds (UTC). Existing rows were written
+# by ``datetime.now()``, so they are naive *local* time with no zone recorded;
+# they must be interpreted in the host's timezone — not as UTC — and per row so
+# a value on the other side of a DST change is still correct. These helpers make
+# every read tolerant of both the old text form and the new integer form, so the
+# code and the data migration can land in either order.
+
+_HOST_ZONE = None
+
+
+def _discover_host_zone():
+    """The host's timezone as a ``ZoneInfo`` (DST applied per timestamp)."""
+    candidates = [os.environ.get('TZ')]
+    try:
+        with open('/etc/timezone') as handle:
+            candidates.append(handle.read().strip())
+    except OSError:
+        pass
+    try:
+        link = os.readlink('/etc/localtime')
+        if 'zoneinfo/' in link:
+            candidates.append(link.split('zoneinfo/', 1)[1])
+    except OSError:
+        pass
+    for name in candidates:
+        if not name:
+            continue
+        try:
+            return ZoneInfo(name)
+        except Exception:
+            continue
+    # Last resort: the process's current offset (no DST history).
+    return datetime.now().astimezone().tzinfo
+
+
+def host_zone():
+    """The host timezone, discovered once and cached."""
+    global _HOST_ZONE
+    if _HOST_ZONE is None:
+        _HOST_ZONE = _discover_host_zone()
+    return _HOST_ZONE
+
+
+def _parse_datetime(text):
+    """Parse a stored timestamp string, or return ``None``."""
+    text = text.strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        pass
+    for fmt in ('%Y-%m-%d %H:%M:%S.%f', '%Y-%m-%d %H:%M:%S',
+                '%Y-%m-%dT%H:%M:%S.%f', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d'):
+        try:
+            return datetime.strptime(text, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def to_epoch(value, tz=None):
+    """Epoch seconds from an int, a naive datetime, or text.
+
+    - ``int``/``float`` are already epoch and returned unchanged, which is what
+      lets one code path read a migrated *and* an unmigrated database;
+    - a ``datetime`` is converted with ``.timestamp()``, treating a naive value
+      as local time in ``tz`` (the host zone by default) so DST is per row;
+    - a ``str`` is parsed and then treated as local;
+    - ``None`` stays ``None``.
+    """
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, (int, float)):
+        return value
+    if isinstance(value, datetime):
+        moment = value
+        if moment.tzinfo is None:
+            moment = moment.replace(tzinfo=tz or host_zone())
+        return moment.timestamp()
+    if isinstance(value, str):
+        parsed = _parse_datetime(value)
+        return None if parsed is None else to_epoch(parsed, tz)
+    return None
+
+
+def now_epoch():
+    """Current time as integer Unix epoch seconds (the writer helper)."""
+    return int(datetime.now().timestamp())
 
 class UserModel(UserMixin, db.Model):
     __tablename__ = 'users'
@@ -57,7 +153,7 @@ class LocationsModel(db.Model):
     lat = db.Column(db.Float())
     lon = db.Column(db.Float())
     acc = db.Column(db.Float())
-    timestamp = db.Column(db.DateTime())
+    timestamp = db.Column(db.Integer())
     userid = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
     batt = db.Column(db.Integer)
     ischarging = db.Column(db.Boolean)
@@ -169,6 +265,6 @@ class KnownPlaceModel(db.Model):
     webhook_url = db.Column(db.String(255))
     enabled = db.Column(db.Boolean, default=True)
     is_inside = db.Column(db.Boolean, default=False)
-    last_webhook_time = db.Column(db.DateTime())
+    last_webhook_time = db.Column(db.Integer())
     last_webhook_status = db.Column(db.String(20))
     include_coords_in_webhook = db.Column(db.Boolean, default=False)

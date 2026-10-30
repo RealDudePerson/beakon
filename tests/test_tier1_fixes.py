@@ -5,7 +5,6 @@ re-introducing the original bug makes it fail.
 """
 
 import os
-from datetime import datetime
 
 import pytest
 from sqlalchemy import text
@@ -13,7 +12,7 @@ from sqlalchemy import text
 import geofencing
 from app import _attempts
 from models import (UserModel, UserDataModel, LocationsModel,
-                    SharingPermissionModel, KnownPlaceModel, db)
+                    SharingPermissionModel, KnownPlaceModel, db, now_epoch)
 
 HTTPS = 'https://localhost'
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -48,7 +47,7 @@ def make_user(flask_app, username, password='password123', is_admin=False,
 def add_location(flask_app, user_id, lat=40.0, lon=-70.0, batt=50):
     with flask_app.app_context():
         db.session.add(LocationsModel(lat=lat, lon=lon, acc=5.0,
-                                      timestamp=datetime.now(), userid=user_id,
+                                      timestamp=now_epoch(), userid=user_id,
                                       batt=batt, ischarging=False))
         db.session.commit()
 

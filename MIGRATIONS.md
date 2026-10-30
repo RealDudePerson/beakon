@@ -141,36 +141,42 @@ wrong shifts every historical row by the host's UTC offset. On a PDT host the sa
 either `1792781260` (read as UTC) or `1792806460` (read as local) — a 7-hour difference
 across all 2738 rows. Pick deliberately, and record the choice.
 
-**The migration, verified against a copy of the real database:**
+**The migration is scripted** — `migrations/005_timestamps_unix_epoch.py`:
 
 ```sh
-# Variant A — the stored values were meant as UTC
-sqlite3 instance/beakon.db \
-  "UPDATE locations_table SET timestamp = CAST(strftime('%s', timestamp) AS INTEGER);"
+# Rehearse first: prints the first and last conversion, writes nothing
+python migrations/005_timestamps_unix_epoch.py --dry-run
 
-# Variant B — the stored values are local time and should become the correct UTC instant
-sqlite3 instance/beakon.db \
-  "UPDATE locations_table SET timestamp = CAST(strftime('%s', timestamp, 'utc') AS INTEGER);"
+# Then convert. A timestamped backup is written before anything changes.
+python migrations/005_timestamps_unix_epoch.py
+
+# Record the choice explicitly rather than relying on the host zone
+python migrations/005_timestamps_unix_epoch.py --timezone America/Los_Angeles
 ```
 
-Both were run against a copy of the live database and produce integers, e.g.
-`2026-10-23 18:47:40.278027` → `1792781260` (A) / `1792806460` (B).
+It interprets the existing text as local time in the host's timezone (overridable with
+`--timezone` so the choice is recorded and reproducible), converts both
+`locations_table.timestamp` and `known_places.last_webhook_time`, rebuilds both tables so the
+declared column type is `INTEGER`, recreates the indexes, and verifies row counts, foreign
+keys and the declared type before reporting success. It is transactional: a failure rolls
+back. Re-running it is a clean no-op.
 
-**This migration is not complete on its own.** SQLite stores an integer happily in a
-`DATETIME` column, but the application still has to change, in the same release:
+**The application code changed with it.** `to_epoch()` in `src/models.py` accepts an integer,
+a `datetime`, or text, and every read goes through it — which is what makes the upgrade safe
+in either order: the new code reads a migrated *and* an unmigrated database, so deploying the
+code before or after the migration cannot break timestamps. The writers use `now_epoch()`.
 
-- `LocationsModel.timestamp` must become `db.Column(db.Integer)` — otherwise SQLAlchemy
-  tries to parse the integers back into `datetime` objects on read.
-- The writers (`location.set_timestamp(datetime.now())`) must write epoch seconds.
-- The readers and filters must treat the column as an integer: the cutoff in the pruning
-  query, the day-range filters, and `format_timestamp()`.
+**One deliberate wrinkle: the column may hold a REAL.** A stored value with microseconds is
+kept as a fractional epoch (`1792806460.278027`) rather than truncated, so the API's
+`timestamp` display strings stay byte-identical across the migration — all 2738 rows were
+verified identical. The column is declared `INTEGER` and has INTEGER affinity, but SQLite
+stores a fractional value as REAL. `timestamp_unix` in the API is always a whole integer.
+If you would rather have pure integer seconds, truncate in the migration's converter and
+accept that display strings for locations older than a day lose their sub-second part — the
+data is the only thing that changes, not any client.
 
-Converting the data without the code change leaves the app unable to read its own rows.
-Do both, or neither.
-
-**Also note:** a fresh install will not produce epoch timestamps until the model changes, so
-the migration and the schema change have to land together for new and existing databases to
-agree.
+**A fresh install** gets the same schema from `db.create_all()` and writes epoch from the
+start, so new and migrated databases agree.
 
 ## 5. Rollback
 

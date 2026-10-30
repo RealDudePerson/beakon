@@ -1,5 +1,5 @@
-from models import db, UserModel, LocationsModel, SharingPermissionModel, UserDataModel
-from datetime import datetime
+from models import (db, UserModel, LocationsModel, SharingPermissionModel,
+                    UserDataModel, now_epoch)
 
 def seed_test_data():
     # 1. Create Users
@@ -22,7 +22,7 @@ def seed_test_data():
             loc.set_lat(52.2 + (i * 0.001))
             loc.set_lon(0.1 + (i * 0.001))
             loc.set_acc(10.0)
-            loc.set_timestamp(datetime.now())
+            loc.set_timestamp(now_epoch())
             loc.set_userid(user.id)
             db.session.add(loc)
     

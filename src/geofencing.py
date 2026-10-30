@@ -1,11 +1,11 @@
 import logging
 import math
-from datetime import datetime
 
 import requests
 from sqlalchemy import func
 
-from models import db, KnownPlaceModel, LocationsModel, UserDataModel, UserModel
+from models import (db, KnownPlaceModel, LocationsModel, UserDataModel,
+                    UserModel, now_epoch)
 
 def haversine_meters(lat1, lon1, lat2, lon2):
     R = 6371000
@@ -87,7 +87,7 @@ def check_geofences(app):
                     payload["fname"] = user_data.fname
                     payload["lname"] = user_data.lname
 
-                now = datetime.now()
+                now = now_epoch()
                 try:
                     response = requests.post(place.webhook_url, json=payload, timeout=5)
                     place.last_webhook_time = now

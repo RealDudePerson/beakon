@@ -16,7 +16,7 @@ from sqlalchemy import event
 
 from app import _attempts, format_timestamp
 from models import (UserModel, UserDataModel, LocationsModel,
-                    SharingPermissionModel, db)
+                    SharingPermissionModel, db, to_epoch)
 
 HTTPS = 'https://localhost'
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -58,8 +58,8 @@ def add_location(flask_app, user_id, lat=40.0, lon=-70.0, batt=50,
     with flask_app.app_context():
         db.session.add(LocationsModel(
             lat=lat, lon=lon, acc=5.0,
-            timestamp=timestamp or datetime.now(), userid=user_id,
-            batt=batt, ischarging=False))
+            timestamp=to_epoch(timestamp) if timestamp is not None else to_epoch(datetime.now()),
+            userid=user_id, batt=batt, ischarging=False))
         db.session.commit()
 
 
@@ -250,7 +250,7 @@ def test_existing_per_person_route_shape_unchanged(flask_app):
     assert body['latest']['timestamp'] == format_timestamp(now)
     assert body['locations'][0]['timestamp'] == format_timestamp(now)
     assert set(body['locations'][0].keys()) == {
-        'lat', 'lon', 'timestamp', 'batt', 'ischarging'}
+        'lat', 'lon', 'timestamp', 'timestamp_unix', 'batt', 'ischarging'}
     # The per-person page itself still renders.
     assert client.get('/map/shared_owner_pp', base_url=HTTPS).status_code == 200
 
@@ -413,15 +413,17 @@ def test_existing_per_person_view_is_unchanged_and_not_dimmed(flask_app):
 
     client = login(flask_app, 'dim_caller_single')
 
-    # The per-person API response is byte-compatible with before: no age_seconds.
+    # The per-person API response keeps every existing field and adds only the
+    # additive timestamp_unix; it still has no age_seconds.
     body = client.get('/api/locations/dim_owner_single',
                       base_url=HTTPS).get_json()
     assert set(body.keys()) == {'locations', 'latest'}
     assert 'age_seconds' not in body['latest']
     assert set(body['latest'].keys()) == {
-        'lat', 'lon', 'timestamp', 'batt', 'ischarging'}
+        'lat', 'lon', 'timestamp', 'timestamp_unix', 'batt', 'ischarging'}
     for loc in body['locations']:
         assert 'age_seconds' not in loc
+        assert 'timestamp_unix' in loc
 
     # The per-person page still renders, with no dimming logic in its assets.
     assert client.get('/map/dim_owner_single', base_url=HTTPS).status_code == 200

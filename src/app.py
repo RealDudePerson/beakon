@@ -14,7 +14,7 @@ from collections import defaultdict
 from logging.handlers import RotatingFileHandler
 from flask import Flask, render_template, request, redirect, session, Response, abort
 from functools import wraps
-from models import UserModel,db,login,UserDataModel,LocationsModel,SharingPermissionModel,KnownPlaceModel
+from models import UserModel,db,login,UserDataModel,LocationsModel,SharingPermissionModel,KnownPlaceModel,to_epoch,now_epoch,host_zone
 from flask_login import login_required, current_user, login_user, logout_user
 from flask_talisman import Talisman
 from flask_apscheduler import APScheduler
@@ -164,7 +164,10 @@ def purge_old_locations(days=None, now=None):
         days = _retention_days()
     if days <= 0:
         return 0
-    cutoff = (now or datetime.now()) - timedelta(days=days)
+    # Compare epoch to epoch: the column now holds Unix seconds, but ``now`` may
+    # still be injected as a datetime by callers/tests, so normalise it.
+    reference = now_epoch() if now is None else to_epoch(now)
+    cutoff = reference - days * 86400
     deleted = LocationsModel.query.filter(
         LocationsModel.timestamp < cutoff
     ).delete(synchronize_session=False)
@@ -388,10 +391,35 @@ def _log_request_summary(route, status, fields=()):
                      request.method, route, status, names)
 
 
+def _local_datetime(ts):
+    """The naive local datetime for a stored timestamp (epoch, datetime or text)."""
+    epoch = to_epoch(ts)
+    if epoch is None:
+        return None
+    return datetime.fromtimestamp(epoch, tz=host_zone()).replace(tzinfo=None)
+
+
+def _timestamp_unix(ts):
+    """The additive ``timestamp_unix`` API value: integer epoch seconds."""
+    epoch = to_epoch(ts)
+    return None if epoch is None else int(epoch)
+
+
+def _age_seconds(ts):
+    """Age in whole seconds, computed from epoch (not from the display string)."""
+    epoch = to_epoch(ts)
+    return None if epoch is None else int(now_epoch() - epoch)
+
+
 def format_timestamp(ts, time_only=False):
+    # Reads go through to_epoch, so this produces the same strings whether the
+    # row still holds the old text datetime or the new epoch integer.
+    local = _local_datetime(ts)
+    if local is None:
+        return ''
     if time_only:
-        return ts.strftime('%H:%M:%S')
-    diff = datetime.now() - ts
+        return local.strftime('%H:%M:%S')
+    diff = datetime.now() - local
     if diff.days < 1:
         hours_ago = diff.seconds // 3600
         if hours_ago >= 1:
@@ -400,7 +428,14 @@ def format_timestamp(ts, time_only=False):
         if minutes_ago >= 1:
             return f"{minutes_ago} minute{'s' if minutes_ago != 1 else ''} ago"
         return "just now"
-    return str(ts)
+    return str(local)
+
+
+@app.template_filter('localdt')
+def _localdt_filter(value):
+    """Render a stored epoch/datetime/text as the local ``str(datetime)``."""
+    local = _local_datetime(value)
+    return '' if local is None else str(local)
 
 def get_filtered_locations(userid, max_locations=10, min_distance_meters=91):
     all_locations = LocationsModel.query.filter_by(userid=userid).order_by(LocationsModel.timestamp.desc()).yield_per(100)
@@ -489,8 +524,10 @@ def get_locations_for_date(userid, date_str):
         date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
     except (ValueError, TypeError):
         abort(400)
-    start_of_day = datetime.combine(date_obj, datetime.min.time())
-    end_of_day = datetime.combine(date_obj, datetime.max.time())
+    # "View a specific day" means a *local* day: build the local day bounds and
+    # compare them as epoch against the (now numeric) column.
+    start_of_day = to_epoch(datetime.combine(date_obj, datetime.min.time()))
+    end_of_day = to_epoch(datetime.combine(date_obj, datetime.max.time()))
     return LocationsModel.query.filter(
         LocationsModel.userid == userid,
         LocationsModel.timestamp >= start_of_day,
@@ -596,6 +633,7 @@ def dashboard():
                 'lat': loc.get_lat(),
                 'lon': loc.get_lon(),
                 'timestamp': format_timestamp(loc.get_timestamp()),
+                'timestamp_unix': _timestamp_unix(loc.get_timestamp()),
                 'batt': loc.get_batt(),
                 'ischarging': loc.get_ischarging(),
                 'index': i
@@ -693,7 +731,7 @@ def record_location():
         location.set_lat(cleaned['lat'])
         location.set_lon(cleaned['lon'])
         location.set_acc(request_data.get('acc'))
-        location.set_timestamp(datetime.now())
+        location.set_timestamp(now_epoch())
         location.set_userid(current_user.get_id())
         
         if 'batt' in cleaned:
@@ -766,7 +804,7 @@ def api_record_location():
                 location.set_lat(lat)
                 location.set_lon(lon)
                 location.set_acc(acc)
-                location.set_timestamp(datetime.now())
+                location.set_timestamp(now_epoch())
                 location.set_userid(user.get_id())
                 if batt:
                     location.set_batt(batt)
@@ -804,6 +842,7 @@ def api_get_locations():
                 'lat': loc.get_lat(),
                 'lon': loc.get_lon(),
                 'timestamp': format_timestamp(loc.get_timestamp(), time_only),
+                'timestamp_unix': _timestamp_unix(loc.get_timestamp()),
                 'batt': loc.get_batt(),
                 'ischarging': loc.get_ischarging()
             } for loc in locations],
@@ -811,6 +850,7 @@ def api_get_locations():
                 'lat': latest.get_lat(),
                 'lon': latest.get_lon(),
                 'timestamp': format_timestamp(latest.get_timestamp(), time_only),
+                'timestamp_unix': _timestamp_unix(latest.get_timestamp()),
                 'batt': latest.get_batt(),
                 'ischarging': latest.get_ischarging()
             }
@@ -847,6 +887,7 @@ def api_get_user_locations(map_username):
                 'lat': loc.get_lat(),
                 'lon': loc.get_lon(),
                 'timestamp': format_timestamp(loc.get_timestamp(), time_only),
+                'timestamp_unix': _timestamp_unix(loc.get_timestamp()),
                 'batt': loc.get_batt(),
                 'ischarging': loc.get_ischarging()
             } for loc in locations],
@@ -854,6 +895,7 @@ def api_get_user_locations(map_username):
                 'lat': latest.get_lat(),
                 'lon': latest.get_lon(),
                 'timestamp': format_timestamp(latest.get_timestamp(), time_only),
+                'timestamp_unix': _timestamp_unix(latest.get_timestamp()),
                 'batt': latest.get_batt(),
                 'ischarging': latest.get_ischarging()
             }
@@ -876,6 +918,10 @@ def api_get_shared_locations():
     ``format_timestamp()`` string is kept for display). The client receives only
     strings, so it cannot derive an age itself; this new endpoint is the only
     one that adds ``age_seconds`` — the existing endpoints are untouched.
+
+    Additive only: ``timestamp`` keeps its exact display string and each point
+    gains ``timestamp_unix`` (integer epoch seconds). An old client ignores the
+    new field; a new client falls back to the string if it is absent.
     """
     id = current_user.get_id()
     try:
@@ -899,10 +945,11 @@ def api_get_shared_locations():
                     'lat': latest.get_lat(),
                     'lon': latest.get_lon(),
                     'timestamp': format_timestamp(latest.get_timestamp()),
-                    # Numeric age for the group view's staleness rule. The
+                    'timestamp_unix': _timestamp_unix(latest.get_timestamp()),
+                    # Numeric age for the group view's staleness rule, computed
+                    # from epoch rather than from the display string. The
                     # single-person endpoint deliberately does NOT expose this.
-                    'age_seconds': int(
-                        (datetime.now() - latest.get_timestamp()).total_seconds()),
+                    'age_seconds': _age_seconds(latest.get_timestamp()),
                     'batt': latest.get_batt(),
                     'ischarging': latest.get_ischarging(),
                 },
@@ -910,6 +957,7 @@ def api_get_shared_locations():
                     'lat': loc.get_lat(),
                     'lon': loc.get_lon(),
                     'timestamp': format_timestamp(loc.get_timestamp()),
+                    'timestamp_unix': _timestamp_unix(loc.get_timestamp()),
                 } for loc in locations],
             })
         return {'people': result}
@@ -1218,7 +1266,10 @@ def admin_health():
     
     # Last location update
     last_loc = LocationsModel.query.order_by(LocationsModel.timestamp.desc()).first()
-    last_loc_time = last_loc.timestamp if last_loc else "No data"
+    # Render the stored epoch as the same local datetime text this page showed
+    # before the migration (the raw integer must not leak into the template).
+    last_loc_time = (str(_local_datetime(last_loc.timestamp))
+                     if last_loc else "No data")
     
     return render_template('admin_health.html', 
                            next_run=next_run, 
@@ -1354,17 +1405,22 @@ def _collect_presence_days(query, lat, lon, radius):
             continue
         if haversine_meters(lat, lon, loc.lat, loc.lon) >= radius:
             continue
-        day = loc.timestamp.date()
+        # Bucket by *local* calendar day: the stored value is epoch, so convert
+        # per row (this is what keeps a day boundary correct across DST).
+        epoch = to_epoch(loc.timestamp)
+        if epoch is None:
+            continue  # no recorded time: nothing to bucket by day
+        day = datetime.fromtimestamp(epoch, tz=host_zone()).date()
         if day not in days:
             if len(days) >= PRESENCE_DAYS:
                 break
             days[day] = {'date': day.isoformat(), 'hits': 0,
-                         'first': loc.timestamp, 'last': loc.timestamp,
+                         'first': epoch, 'last': epoch,
                          'last_lat': loc.lat, 'last_lon': loc.lon}
         entry = days[day]
         entry['hits'] += 1
-        entry['first'] = min(entry['first'], loc.timestamp)
-        entry['last'] = max(entry['last'], loc.timestamp)
+        entry['first'] = min(entry['first'], epoch)
+        entry['last'] = max(entry['last'], epoch)
     return days
 
 @app.route('/presence')
@@ -1422,9 +1478,14 @@ def api_presence():
 
     days = _collect_presence_days(locations.yield_per(100), lat, lon, radius)
 
+    # ``first``/``last`` keep their exact local ``%Y-%m-%d %H:%M:%S`` strings;
+    # ``first_unix``/``last_unix`` are the additive integer epoch companions.
     result = [{'date': e['date'], 'hits': e['hits'],
-               'first': e['first'].strftime('%Y-%m-%d %H:%M:%S'),
-               'last': e['last'].strftime('%Y-%m-%d %H:%M:%S'),
+               'first': datetime.fromtimestamp(e['first'], tz=host_zone())
+                        .strftime('%Y-%m-%d %H:%M:%S'),
+               'last': datetime.fromtimestamp(e['last'], tz=host_zone())
+                       .strftime('%Y-%m-%d %H:%M:%S'),
+               'first_unix': int(e['first']), 'last_unix': int(e['last']),
                'last_lat': e['last_lat'], 'last_lon': e['last_lon']}
               for e in days.values()]
     return {'user': username, 'lat': lat, 'lon': lon, 'radius': radius, 'days': result}

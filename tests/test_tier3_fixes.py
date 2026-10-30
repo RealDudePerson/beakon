@@ -16,7 +16,8 @@ from flask import Flask
 import app as beakon_app
 from app import _attempts
 from models import (UserModel, UserDataModel, LocationsModel,
-                    SharingPermissionModel, KnownPlaceModel, db)
+                    SharingPermissionModel, KnownPlaceModel, db, to_epoch,
+                    now_epoch)
 
 HTTPS = 'https://localhost'
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -59,7 +60,7 @@ def login(flask_app, username, password='password123'):
 def add_location(flask_app, user_id, lat=40.0, lon=-70.0, batt=50):
     with flask_app.app_context():
         db.session.add(LocationsModel(lat=lat, lon=lon, acc=5.0,
-                                      timestamp=datetime.now(), userid=user_id,
+                                      timestamp=now_epoch(), userid=user_id,
                                       batt=batt, ischarging=False))
         db.session.commit()
 
@@ -262,9 +263,9 @@ def test_retention_unset_does_not_purge(flask_app):
     now = datetime.now()
     with flask_app.app_context():
         db.session.add(LocationsModel(lat=1.0, lon=1.0,
-                                      timestamp=now - timedelta(days=3650),
+                                      timestamp=to_epoch(now - timedelta(days=3650)),
                                       userid=uid))
-        db.session.add(LocationsModel(lat=2.0, lon=2.0, timestamp=now,
+        db.session.add(LocationsModel(lat=2.0, lon=2.0, timestamp=to_epoch(now),
                                       userid=uid))
         db.session.commit()
 
@@ -288,12 +289,16 @@ def test_retention_purges_only_rows_older_than_cutoff(flask_app):
     with flask_app.app_context():
         db.session.add_all([
             LocationsModel(lat=10.0, lon=1.0,
-                           timestamp=now - timedelta(days=10), userid=uid),
+                           timestamp=to_epoch(now - timedelta(days=10)),
+                           userid=uid),
             LocationsModel(lat=20.0, lon=2.0,
-                           timestamp=now - timedelta(days=2), userid=uid),
-            LocationsModel(lat=30.0, lon=3.0, timestamp=now, userid=uid),
+                           timestamp=to_epoch(now - timedelta(days=2)),
+                           userid=uid),
+            LocationsModel(lat=30.0, lon=3.0, timestamp=to_epoch(now),
+                           userid=uid),
             LocationsModel(lat=40.0, lon=4.0,
-                           timestamp=now - timedelta(days=30), userid=other),
+                           timestamp=to_epoch(now - timedelta(days=30)),
+                           userid=other),
         ])
         db.session.commit()
 

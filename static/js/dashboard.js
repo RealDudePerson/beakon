@@ -170,6 +170,17 @@
         return R * c;
     }
 
+    // Gap math uses the numeric epoch the server now sends. ``new Date()`` of a
+    // display string ("5 minutes ago") is NaN, which silently disabled the time
+    // part of the cluster rule; fall back to the string for an old server that
+    // omits ``timestamp_unix``.
+    function timestampMillis(loc) {
+        if (loc.timestamp_unix !== undefined && loc.timestamp_unix !== null) {
+            return loc.timestamp_unix * 1000;
+        }
+        return new Date(loc.timestamp).getTime();
+    }
+
     function clusterLocations(locations) {
         if (locations.length === 0) return [];
         var clustered = [locations[0]];
@@ -177,7 +188,7 @@
             var curr = locations[i];
             var prev = clustered[clustered.length - 1];
             var dist = haversineMeters(prev.lat, prev.lon, curr.lat, curr.lon);
-            var timeDiff = (new Date(curr.timestamp) - new Date(prev.timestamp)) / 1000 / 60;
+            var timeDiff = (timestampMillis(curr) - timestampMillis(prev)) / 1000 / 60;
             if (dist >= 50 || timeDiff >= 5) {
                 clustered.push(curr);
             }

@@ -10,7 +10,6 @@ temporary SQLite database before importing the app, so the real
 import os
 import sys
 import tempfile
-from datetime import datetime
 
 import pytest
 
@@ -66,7 +65,7 @@ def flask_app():
 @pytest.fixture(scope='session')
 def auth_client(flask_app):
     """A test client logged in as a throwaway user with one location."""
-    from models import UserModel, UserDataModel, LocationsModel, db
+    from models import UserModel, UserDataModel, LocationsModel, db, now_epoch
 
     with flask_app.app_context():
         user = UserModel.query.filter_by(username='tester').first()
@@ -78,7 +77,7 @@ def auth_client(flask_app):
             db.session.add(UserDataModel(id=user.id, fname='Test', lname='User'))
             db.session.add(LocationsModel(
                 lat=40.0, lon=-70.0, acc=5.0,
-                timestamp=datetime.now(), userid=user.id,
+                timestamp=now_epoch(), userid=user.id,
                 batt=50, ischarging=False))
             db.session.commit()
 

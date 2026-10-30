@@ -154,7 +154,8 @@ def main():
                 "insert into locations_table "
                 "(lat, lon, acc, timestamp, userid, batt, ischarging) "
                 "values (?,?,?,?,?,?,?)",
-                (lat, lon, 10.0, (now - timedelta(seconds=age_s)).isoformat(" "),
+                (lat, lon, 10.0,
+                 int((now - timedelta(seconds=age_s)).timestamp()),
                  uid, random.randint(35, 95), 0))
 
         creds.append((username, password, latest_age_s))

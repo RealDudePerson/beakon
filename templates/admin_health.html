@@ -22,7 +22,7 @@
                     {% for place in places %}
                     <tr>
                         <td>{{ place.name }}</td>
-                        <td>{{ place.last_webhook_time }}</td>
+                        <td>{{ place.last_webhook_time | localdt }}</td>
                         <td>{{ place.last_webhook_status }}</td>
                     </tr>
                     {% endfor %}
