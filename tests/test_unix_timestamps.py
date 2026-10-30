@@ -113,13 +113,16 @@ def test_to_epoch_handles_a_text_database_and_an_int_database():
 
 
 # --------------------------------------------------------------------------
-# Criterion 1 / section 3 — format_timestamp() strings are identical
+# Criterion 1 / section 3 — format_timestamp() drops sub-seconds for migrated rows
 # --------------------------------------------------------------------------
 def test_format_timestamp_old_branch_is_byte_identical_before_and_after():
     dt = datetime(2020, 1, 2, 3, 4, 5, 678901)
-    epoch = to_epoch(dt)
+    # A migrated row holds whole integer seconds, so the older-than-a-day branch
+    # renders the truncated string. The tolerant reader still accepts the
+    # unmigrated datetime/text and keeps their sub-second part.
+    epoch = int(to_epoch(dt))
     assert format_timestamp(dt) == str(dt)
-    assert format_timestamp(epoch) == str(dt)
+    assert format_timestamp(epoch) == '2020-01-02 03:04:05'
     assert format_timestamp('2020-01-02 03:04:05.678901') == str(dt)
 
 

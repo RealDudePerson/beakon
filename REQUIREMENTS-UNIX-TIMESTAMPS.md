@@ -178,3 +178,12 @@ The app must work against **both** an old server (no `timestamp_unix`) and a new
 - App: `./gradlew test` and `./gradlew assembleDebug` with the same JDK/ANDROID_HOME as
   `~/projects/beakon-android`'s existing builds.
 - Report explicitly: what was verified, and that nothing has been run against a real device.
+
+## Amendment
+
+The owner chose **pure integer seconds** over preserving sub-second precision. The migration
+therefore truncates every converted value toward zero and stores an INTEGER epoch, so no
+stored value is a fractional REAL. This supersedes the byte-identical-string contract above:
+a `timestamp` display string for a location older than a day loses its sub-second part
+(`2026-10-23 18:47:40.278027` becomes `2026-10-23 18:47:40`). `to_epoch()` stays tolerant and
+may still accept a float; only the stored value becomes an integer.

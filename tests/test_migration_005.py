@@ -2,7 +2,7 @@
 
 Exercised against a throwaway database built with the *old* schema and text
 timestamps, so the migration, its idempotency, its ``--dry-run`` and the
-byte-identical display string are all proven without touching any real
+truncated display string are all proven without touching any real
 database.
 """
 
@@ -124,8 +124,8 @@ def test_migration_converts_and_is_idempotent(tmp_path):
     assert 'idx_userid_timestamp' in _index_names(db_path, 'locations_table')
     assert 'ix_locations_table_userid' in _index_names(db_path, 'locations_table')
 
-    # A whole-second value becomes an INTEGER; a sub-second value keeps its
-    # precision so the display string is byte-identical.
+    # Every stored value is a whole-second INTEGER, so a sub-second source value
+    # is truncated and its display string loses the sub-second part.
     conn = sqlite3.connect(db_path)
     stored = dict(conn.execute(
         'SELECT id, timestamp FROM locations_table').fetchall())
@@ -134,9 +134,9 @@ def test_migration_converts_and_is_idempotent(tmp_path):
     webhook = conn.execute(
         'SELECT last_webhook_time FROM known_places WHERE id=1').fetchone()[0]
     conn.close()
-    assert types[1] == 'real'
+    assert types[1] == 'integer'
     assert types[2] == 'integer'
-    assert format_timestamp(stored[1]) == '2021-06-01 12:34:56.789012'
+    assert format_timestamp(stored[1]) == '2021-06-01 12:34:56'
     assert format_timestamp(stored[2]) == '2021-06-02 00:00:30'
     assert int(webhook) == int(to_epoch('2021-06-03 08:15:00.000001'))
 

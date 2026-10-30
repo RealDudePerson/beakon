@@ -166,14 +166,11 @@ a `datetime`, or text, and every read goes through it — which is what makes th
 in either order: the new code reads a migrated *and* an unmigrated database, so deploying the
 code before or after the migration cannot break timestamps. The writers use `now_epoch()`.
 
-**One deliberate wrinkle: the column may hold a REAL.** A stored value with microseconds is
-kept as a fractional epoch (`1792806460.278027`) rather than truncated, so the API's
-`timestamp` display strings stay byte-identical across the migration — all 2738 rows were
-verified identical. The column is declared `INTEGER` and has INTEGER affinity, but SQLite
-stores a fractional value as REAL. `timestamp_unix` in the API is always a whole integer.
-If you would rather have pure integer seconds, truncate in the migration's converter and
-accept that display strings for locations older than a day lose their sub-second part — the
-data is the only thing that changes, not any client.
+**Stored values are whole integer seconds.** The converter truncates toward zero, so every
+row — including one whose source text carried microseconds — becomes an INTEGER epoch. The
+only consequence is that a location older than a day loses the sub-second part of its
+`timestamp` display string (`2026-10-23 18:47:40.278027` becomes `2026-10-23 18:47:40`).
+`timestamp_unix` in the API is, as before, a whole integer.
 
 **A fresh install** gets the same schema from `db.create_all()` and writes epoch from the
 start, so new and migrated databases agree.

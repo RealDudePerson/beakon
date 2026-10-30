@@ -15,9 +15,11 @@ shift every row by the host's offset (for example 7 hours on a PDT host). The
 timezone is therefore explicit: the host zone by default, overridable with
 ``--timezone`` so the choice is recorded and reproducible.
 
-Sub-second precision is preserved (a value with microseconds is stored as a
-REAL epoch, a whole-second value as an INTEGER) so that the API's ``timestamp``
-display strings stay byte-identical across the migration.
+Values are truncated to whole seconds: every stored value is an INTEGER epoch,
+never a fractional REAL. This is the one client-visible consequence of the
+migration — the display string for a location older than a day loses its
+sub-second part (``2026-10-23 18:47:40.278027`` becomes
+``2026-10-23 18:47:40``).
 
 The script is safe to run more than once: if the columns are already declared
 ``INTEGER`` it prints a message and changes nothing.
@@ -124,7 +126,7 @@ def _make_converter(tz):
             if parsed is None:
                 return value  # unparseable: leave it for a human to inspect
             epoch = parsed.replace(tzinfo=tz).timestamp()
-            return int(epoch) if float(epoch).is_integer() else epoch
+            return int(epoch)  # truncate toward zero: whole integer seconds
         return value
     return convert
 
