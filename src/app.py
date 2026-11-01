@@ -14,7 +14,7 @@ from collections import defaultdict
 from logging.handlers import RotatingFileHandler
 from flask import Flask, render_template, request, redirect, session, Response, abort
 from functools import wraps
-from models import UserModel,db,login,UserDataModel,LocationsModel,SharingPermissionModel,KnownPlaceModel,to_epoch,now_epoch,host_zone
+from models import UserModel,db,login,UserDataModel,LocationsModel,SharingPermissionModel,KnownPlaceModel,to_epoch,now_epoch,host_zone,AppSettingModel,get_app_setting,set_app_setting
 from flask_login import login_required, current_user, login_user, logout_user
 from flask_talisman import Talisman
 from flask_apscheduler import APScheduler
@@ -136,8 +136,27 @@ login.login_view = 'login'
 
 # Ensure all database tables exist
 with app.app_context():
-    from models import UserModel, LocationsModel, UserDataModel, SharingPermissionModel, KnownPlaceModel
+    from models import UserModel, LocationsModel, UserDataModel, SharingPermissionModel, KnownPlaceModel, AppSettingModel
     db.create_all()
+
+# Registration is admin-toggleable at runtime. The database setting wins when
+# present; otherwise fall back to the config flag, which stays fail-closed
+# (default False). This preserves REGISTRATION_ENABLED as the operator default
+# rather than replacing it, per REQUIREMENTS-TIER1/TIER3.
+REGISTRATION_SETTING_KEY = 'registration_enabled'
+
+
+def registration_enabled():
+    """Whether new accounts may register right now.
+
+    Precedence: the admin's stored setting, then the ``REGISTRATION_ENABLED``
+    config flag (fail-closed to ``False`` when neither is set).
+    """
+    override = get_app_setting(REGISTRATION_SETTING_KEY)
+    if override is None:
+        return bool(app.config.get('REGISTRATION_ENABLED', False))
+    return str(override).lower() in ('1', 'true', 'yes', 'on')
+
 
 # Tier 3 item 7: retention is config-driven and defaults to OFF. A window of 0
 # (or an unset/non-numeric value) means "keep everything"; the purge only runs
@@ -590,7 +609,7 @@ def login():
             app.logger.info('%s logged in successfully', username)
             return redirect('/dashboard')
         _record_attempt(rate_key)
-    return render_template('login.html')
+    return render_template('login.html', registration_enabled=registration_enabled())
     
 # Default page for logged in users
 @app.route('/dashboard', methods=['POST','GET'])
@@ -674,7 +693,7 @@ def logout():
 # TODO: Possibly add some sort of spam prevention
 @app.route('/register', methods=['POST','GET'])
 def register():
-    if app.config.get('REGISTRATION_ENABLED', False):
+    if registration_enabled():
         if current_user.is_authenticated:
             return redirect('/dashboard')
         
@@ -1251,7 +1270,8 @@ def admin_dashboard():
             'lname': lname,
             'is_admin': is_admin
         })
-    return render_template('admin.html', users=user_list)
+    return render_template('admin.html', users=user_list,
+                           registration_enabled=registration_enabled())
 
 @app.route('/admin/health', methods=['GET'])
 @login_required
@@ -1395,6 +1415,21 @@ def admin_delete_user(user_id):
     db.session.delete(user)
     db.session.commit()
     return Response(status=200)
+
+@app.route('/admin/settings/registration', methods=['POST'])
+@login_required
+@admin_required
+def admin_set_registration():
+    """Turn open registration on or off at runtime (admin only)."""
+    data = request.get_json(silent=True) or {}
+    if 'enabled' not in data:
+        return {'error': 'enabled is required'}, 400
+    enabled = bool(data.get('enabled'))
+    set_app_setting(REGISTRATION_SETTING_KEY, 'true' if enabled else 'false')
+    app.logger.info('%s turned registration %s',
+                    current_user.get_username(), 'on' if enabled else 'off')
+    _log_request_summary('/admin/settings/registration', 200, data.keys())
+    return {'registration_enabled': enabled}, 200
 
 # Presence search: "when was this person within radius R of point P recently?"
 # Returns the 10 most recent calendar days on which the person logged at least one

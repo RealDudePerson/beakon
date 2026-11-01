@@ -75,6 +75,12 @@ search prefilter. It is `CREATE INDEX IF NOT EXISTS`, so running it twice is a c
 sqlite3 instance/beakon.db < migrations/004_locations_lat_lon_index.sql
 ```
 
+**New tables — nothing to run.** A migration file is only needed when an *existing* table has
+to change. `db.create_all()` runs on every startup and creates any table that is missing, so a
+release that only *adds* a table brings an existing database forward on the next restart with
+no migration file and no manual step. `app_settings` (the admin-controlled registration flag)
+is one of these: it appears empty on first start after the upgrade and needs no action.
+
 **Table rebuilds — Python scripts.** SQLite cannot change a column type, add
 `AUTOINCREMENT`, or drop a constraint with `ALTER TABLE`, so those migrations rebuild the
 table: create a new one, copy every row, drop the old, rename the new.

@@ -268,3 +268,35 @@ class KnownPlaceModel(db.Model):
     last_webhook_time = db.Column(db.Integer())
     last_webhook_status = db.Column(db.String(20))
     include_coords_in_webhook = db.Column(db.Boolean, default=False)
+
+
+class AppSettingModel(db.Model):
+    """Runtime-adjustable settings, edited by admins and stored in the database.
+
+    Settings live here (rather than in ``config.cfg``) so an admin change takes
+    effect immediately and survives a restart, without rewriting the operator's
+    config file — which also holds secrets. A missing key means "no override":
+    callers fall back to their config default. The table is created on startup
+    by ``db.create_all()``, so no migration is needed for existing databases.
+    """
+    __tablename__ = 'app_settings'
+    key = db.Column(db.String(64), primary_key=True)
+    value = db.Column(db.String(255))
+
+
+def get_app_setting(key, default=None):
+    """Return the stored value for ``key``, or ``default`` when unset."""
+    row = db.session.get(AppSettingModel, key)
+    return default if row is None else row.value
+
+
+def set_app_setting(key, value):
+    """Store ``value`` for ``key`` (insert or update) and commit."""
+    row = db.session.get(AppSettingModel, key)
+    if row is None:
+        row = AppSettingModel(key=key, value=value)
+        db.session.add(row)
+    else:
+        row.value = value
+    db.session.commit()
+    return row.value

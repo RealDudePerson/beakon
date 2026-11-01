@@ -17,6 +17,21 @@
 <div class="grid-x grid-padding-x">
   <div class="large-12 cell">
     <div class="callout">
+      <h5>Registration</h5>
+      <p>
+        New account sign-ups are currently
+        <strong id="registration-state">{{ 'enabled' if registration_enabled else 'disabled' }}</strong>.
+      </p>
+      <button class="button" id="toggle-registration-btn" type="button"
+              data-enabled="{{ 'true' if registration_enabled else 'false' }}">
+        {{ 'Disable registration' if registration_enabled else 'Enable registration' }}
+      </button>
+    </div>
+  </div>
+</div>
+<div class="grid-x grid-padding-x">
+  <div class="large-12 cell">
+    <div class="callout">
       <h5>User Management</h5>
       <button class="button" id="add-user-btn" type="button">Add User</button>
       <table id="admin-users-table" class="stack hover-unstriped">

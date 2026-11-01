@@ -105,6 +105,21 @@ function openAddModal() {
     $('#user-modal').foundation('open');
 }
 
+function toggleRegistration(btn) {
+    var enabled = btn.getAttribute('data-enabled') !== 'true';
+    fetch('/admin/settings/registration', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({enabled: enabled})
+    }).then(function (res) {
+        if (res.ok) {
+            location.reload();
+        } else {
+            alert('Error updating the registration setting');
+        }
+    });
+}
+
 document.addEventListener('DOMContentLoaded', function () {
     var dataEl = document.getElementById('admin-users-data');
     if (dataEl) {
@@ -113,6 +128,13 @@ document.addEventListener('DOMContentLoaded', function () {
         } catch (e) {
             adminUsers = [];
         }
+    }
+
+    var toggleRegistrationBtn = document.getElementById('toggle-registration-btn');
+    if (toggleRegistrationBtn) {
+        toggleRegistrationBtn.addEventListener('click', function () {
+            toggleRegistration(toggleRegistrationBtn);
+        });
     }
 
     var addBtn = document.getElementById('add-user-btn');

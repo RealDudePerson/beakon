@@ -42,9 +42,11 @@
                 <button class="button" type="submit" value="Submit">Submit</button>
               </fieldset>
             </div>
+            {% if registration_enabled %}
             <div class="cell large-4 medium-6 small-12">
               <a href="{{ url_for('register')}}">Register</a>
             </div>
+            {% endif %}
           </div>
         </div>
       </form>
