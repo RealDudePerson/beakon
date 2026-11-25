@@ -1,14 +1,103 @@
 {% extends "layout.html" %}
-{% block title %}Audit Logs{% endblock %}
+{% block title %}Application Logs{% endblock %}
+
+{% macro render_log_entry(entry) %}
+<article class="log-entry" data-level="{{ entry.level|lower }}">
+  <div class="log-entry-header">
+    <span class="label log-level log-level-{{ entry.level|lower }}">{{ entry.level }}</span>
+    <time class="log-timestamp">{{ entry.timestamp or 'Unknown time' }}</time>
+    {% if entry.logger %}<span class="log-logger">{{ entry.logger }}</span>{% endif %}
+  </div>
+  <pre class="log-message">{{ entry.message }}</pre>
+  {% if entry.source %}
+  <details class="log-source">
+    <summary>Source</summary>
+    <code>{{ entry.source }}</code>
+  </details>
+  {% endif %}
+</article>
+{% endmacro %}
+
 {% block content %}
 <div class="grid-x grid-padding-x">
-    <div class="large-12 cell">
-        <h1>Audit Logs</h1>
-        <div class="callout" style="height: 500px; overflow-y: scroll; font-family: monospace;">
-            {% for line in logs %}
-                {{ line }}<br>
-            {% endfor %}
-        </div>
+  <div class="large-12 cell">
+    <div class="admin-logs-heading">
+      <h1>Application Logs</h1>
+      <a href="{{ url_for('admin_dashboard') }}" class="button secondary small">Back to Admin</a>
     </div>
+    <div class="callout secondary">
+      Current log level: <strong>{{ log_level }}</strong>.
+      <a href="{{ url_for('admin_dashboard') }}">Change it on the Admin dashboard</a>.
+      Entries are newest first and include up to ten rotated log backups.
+    </div>
+  </div>
 </div>
+
+<div class="grid-x grid-padding-x admin-logs">
+  <div class="large-12 cell">
+    <form id="log-filters" class="log-filters" action="{{ url_for('admin_audit') }}" method="get">
+      <div class="grid-x grid-padding-x">
+        <div class="medium-4 cell">
+          <label for="log-search">Search</label>
+          <input type="search" id="log-search" name="q" value="{{ filters.q }}"
+                 placeholder="Message, logger, source, or traceback" autocomplete="off">
+        </div>
+        <div class="medium-2 cell">
+          <label for="log-level-filter">Severity</label>
+          <select id="log-level-filter" name="level">
+            <option value="ALL"{% if filters.level|upper == 'ALL' %} selected{% endif %}>All levels</option>
+            <option value="UNKNOWN"{% if filters.level|upper == 'UNKNOWN' %} selected{% endif %}>Unparsed</option>
+            {% for level in ('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL') %}
+            <option value="{{ level }}"{% if filters.level|upper == level %} selected{% endif %}>{{ level }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="medium-3 cell">
+          <label for="log-start">Start time</label>
+          <input type="datetime-local" id="log-start" name="start" value="{{ filters.start }}" step="1">
+        </div>
+        <div class="medium-3 cell">
+          <label for="log-end">End time</label>
+          <input type="datetime-local" id="log-end" name="end" value="{{ filters.end }}" step="1">
+        </div>
+      </div>
+      <p class="admin-settings-help">Times use the server's local timezone. An end time includes the selected minute or second.</p>
+      <div class="log-filter-actions">
+        <button class="button" id="apply-log-filters" type="submit">Apply filters</button>
+        <button class="button secondary" id="reset-log-filters" type="button">Reset</button>
+      </div>
+    </form>
+
+    <div class="callout alert log-error" id="log-error" role="alert"{% if not initial_error %} hidden{% endif %}>{{ initial_error|default('') }}</div>
+    <p class="log-status" id="log-status" role="status" aria-live="polite"{% if initial_error %} hidden{% endif %}>
+      Showing {{ entries|length }} of {{ total }} matching {{ 'entry' if total == 1 else 'entries' }}.
+    </p>
+    <p class="log-loading" id="log-loading" role="status" aria-live="polite" hidden>Loading logs…</p>
+    <div class="log-empty" id="log-empty"{% if initial_error or total %} hidden{% endif %}>
+      No log entries match these filters.
+    </div>
+
+    <div class="log-entries" id="log-entries"
+         data-count="{{ offset + entries|length }}"
+         data-total="{{ total }}"
+         data-snapshot="{{ snapshot or '' }}"
+         data-next-cursor="{{ next_cursor or '' }}"
+         data-has-more="{{ 'true' if next_cursor is not none else 'false' }}">
+      {% for entry in entries %}
+        {{ render_log_entry(entry) }}
+      {% endfor %}
+    </div>
+
+    <div class="log-pagination">
+      <button class="button secondary" id="load-more-logs" type="button"
+              data-next-cursor="{{ next_cursor or '' }}"
+              {% if next_cursor is none %}hidden{% endif %}>Load more</button>
+    </div>
+    <noscript><p>Filters work without JavaScript. Enable JavaScript to load additional pages of results.</p></noscript>
+  </div>
+</div>
+{% endblock %}
+
+{% block script %}
+<script src="{{ url_for('static', filename = 'js/admin_logs.js') }}"></script>
 {% endblock %}

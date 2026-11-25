@@ -2,7 +2,6 @@ import logging
 import os
 import sys
 import math
-import mimetypes
 import random
 import re
 import ipaddress
@@ -20,16 +19,12 @@ from flask_talisman import Talisman
 from flask_apscheduler import APScheduler
 from datetime import datetime, timedelta
 from geofencing import check_geofences, haversine_meters
+from logging_utils import (LOG_LEVELS, BeakonLogFormatter, SingleLineLogFilter,
+                           filter_log_entries, read_log_snapshot,
+                           sanitise_log_record)
 
 # Define app
 app = Flask(__name__, template_folder='../templates', static_folder='../static', instance_path=os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'instance'))
-
-# The Android companion app is hosted as a static file and must be delivered as
-# an installer package. Some hosts' mime.types do not know .apk (or map it to
-# application/octet-stream), so pin the type rather than trusting the platform.
-# Verified: mimetypes already guesses this on the current host, but registering
-# it keeps the download correct everywhere. See static/beakon-companion-debug.apk.
-mimetypes.add_type('application/vnd.android.package-archive', '.apk')
 
 def _default_config_path():
     project_root = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
@@ -54,9 +49,73 @@ ensure_paths(app)
 logs_path = os.path.join(app.instance_path, 'logs')
 file_handler = RotatingFileHandler(os.path.join(logs_path, 'beakon.log'), 'a', 1 * 1024 * 1024, 10)
 file_handler.setLevel(logging.DEBUG)
-file_handler.setFormatter(logging.Formatter('%(asctime)s [%(process)-5d:%(thread)#x] %(name)s %(levelname)-5s %(message)s [in %(module)s @ %(pathname)s:%(lineno)d]'))
+file_handler.setFormatter(BeakonLogFormatter())
 app.logger.addHandler(file_handler)
 app.logger.setLevel(logging.DEBUG)
+app.logger.addFilter(SingleLineLogFilter())
+
+# Log levels can be changed from the admin dashboard. A database override wins;
+# LOG_LEVEL in config.cfg remains the operator's default for fresh installations.
+LOG_LEVEL_SETTING_KEY = 'log_level'
+
+
+def normalise_log_level(raw, default='DEBUG'):
+    """Return a supported level name, or ``default`` for an invalid value."""
+    if isinstance(raw, str):
+        level = raw.strip().upper()
+        if level in LOG_LEVELS:
+            return level
+    return default
+
+
+def apply_log_level(level):
+    """Apply a level to the application logger and all of its handlers."""
+    level = normalise_log_level(level)
+    numeric_level = getattr(logging, level)
+    app.logger.setLevel(numeric_level)
+    for handler in app.logger.handlers:
+        handler.setLevel(numeric_level)
+    return level
+
+
+def configured_log_level():
+    """The validated LOG_LEVEL config value (DEBUG preserves legacy behavior)."""
+    raw = app.config.get('LOG_LEVEL')
+    level = normalise_log_level(raw, None)
+    if raw is not None and level is None:
+        app.logger.warning('Ignoring invalid LOG_LEVEL=%r; using DEBUG.', raw)
+        return 'DEBUG'
+    return level or 'DEBUG'
+
+
+def current_log_level():
+    """Effective log level: stored admin override, then config, then DEBUG."""
+    override = get_app_setting(LOG_LEVEL_SETTING_KEY)
+    if override is None:
+        return configured_log_level()
+    level = normalise_log_level(override, None)
+    if level is None:
+        app.logger.warning('Ignoring invalid stored log level %r; using config default.', override)
+        return configured_log_level()
+    return level
+
+
+def _emit_audit_event(message, *args):
+    """Write an audit record even when the current log threshold would drop it.
+
+    ``Logger`` and ``Handler`` normally enforce their levels before emitting. A
+    security-sensitive settings change must remain visible across high-to-low
+    transitions, so this deliberately hands an already-sanitized INFO record to
+    each attached handler directly.
+    """
+    frame = sys._getframe(1)
+    record = app.logger.makeRecord(
+        app.logger.name, logging.INFO, frame.f_code.co_filename,
+        frame.f_lineno, message, args, None, func=frame.f_code.co_name)
+    sanitise_log_record(record)
+    for handler in list(app.logger.handlers):
+        handler.handle(record)
+
 
 # The historical config format is ``KEY = VALUE`` with bare (unquoted) values
 # such as ``TRUSTED_PROXY_IPS = 192.168.2.8``. Flask's ``from_pyfile`` executes
@@ -115,8 +174,9 @@ def load_config(app, config_path):
     finally:
         os.unlink(normalised_path)
 
-# Load config
+# Load config, then apply its logging default before any request is served.
 load_config(app, _default_config_path())
+apply_log_level(configured_log_level())
 
 # S8: reject oversized request bodies instead of buffering them. The largest
 # legitimate payload here is a small JSON location fix or known-place record (a
@@ -138,6 +198,9 @@ login.login_view = 'login'
 with app.app_context():
     from models import UserModel, LocationsModel, UserDataModel, SharingPermissionModel, KnownPlaceModel, AppSettingModel
     db.create_all()
+    # Re-apply after schema initialization so an admin's saved override survives
+    # restarts without modifying config.cfg.
+    apply_log_level(current_log_level())
 
 # Registration is admin-toggleable at runtime. The database setting wins when
 # present; otherwise fall back to the config flag, which stays fail-closed
@@ -1271,7 +1334,9 @@ def admin_dashboard():
             'is_admin': is_admin
         })
     return render_template('admin.html', users=user_list,
-                           registration_enabled=registration_enabled())
+                           registration_enabled=registration_enabled(),
+                           log_level=current_log_level(),
+                           log_levels=LOG_LEVELS)
 
 @app.route('/admin/health', methods=['GET'])
 @login_required
@@ -1296,16 +1361,171 @@ def admin_health():
                            places=places, 
                            last_loc_time=last_loc_time)
 
+LOG_PAGE_SIZE = 100
+LOG_MAX_PAGE_SIZE = 500
+_LOG_DATE_VALUE_RE = re.compile(
+    r'^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2})?)?$')
+_LOG_CURSOR_RE = re.compile(
+    r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}'
+    r'\|\d{20}\|\d{20}\|\d{20}\|\d{20}$')
+_LOG_SNAPSHOT_RE = re.compile(r'^[A-Za-z0-9_-]{1,8192}$')
+
+
+def _log_date_bound(raw, end=False):
+    """Normalize a datetime-local filter value for lexical timestamp comparison."""
+    if not raw:
+        return None
+    # Match exactly what <input type="datetime-local"> emits. In particular,
+    # reject timezone offsets and fractional seconds rather than silently
+    # discarding information and filtering the wrong interval.
+    if not _LOG_DATE_VALUE_RE.fullmatch(raw):
+        raise ValueError('Invalid %s time. Use YYYY-MM-DDTHH:MM[:SS].' %
+                         ('end' if end else 'start'))
+    try:
+        value = datetime.fromisoformat(raw)
+    except (TypeError, ValueError):
+        raise ValueError('Invalid %s time. Use YYYY-MM-DDTHH:MM[:SS].' %
+                         ('end' if end else 'start'))
+
+    if end:
+        # A date-only selection includes the whole day; a minute-only selection
+        # includes that minute. Second/millisecond selections include their final
+        # millisecond as well, matching the inclusive filter semantics.
+        if len(raw) == 10:
+            value = value.replace(hour=23, minute=59, second=59)
+        elif len(raw) == 16:
+            value = value.replace(second=59)
+        value = value.replace(microsecond=999000)
+    else:
+        value = value.replace(microsecond=0)
+    return value.strftime('%Y-%m-%d %H:%M:%S,%f')[:-3]
+
+
+def _parse_log_filters(args):
+    """Validate admin log query parameters, raising ValueError for bad input."""
+    level = str(args.get('level') or 'ALL').strip().upper()
+    if level not in ('ALL', 'UNKNOWN') + LOG_LEVELS:
+        raise ValueError('Invalid log level filter.')
+
+    try:
+        limit = int(args.get('limit') or LOG_PAGE_SIZE)
+    except (TypeError, ValueError):
+        raise ValueError('limit must be an integer.')
+    if not 1 <= limit <= LOG_MAX_PAGE_SIZE:
+        raise ValueError('limit must be between 1 and %d.' % LOG_MAX_PAGE_SIZE)
+
+    cursor = str(args.get('cursor') or '').strip()
+    snapshot = str(args.get('snapshot') or '').strip()
+    if cursor and not _LOG_CURSOR_RE.fullmatch(cursor):
+        raise ValueError('Invalid log pagination cursor.')
+    if snapshot and not _LOG_SNAPSHOT_RE.fullmatch(snapshot):
+        raise ValueError('Invalid log snapshot.')
+    if cursor and not snapshot:
+        raise ValueError('A log pagination cursor requires a snapshot.')
+
+    start_raw = str(args.get('start') or '').strip()
+    end_raw = str(args.get('end') or '').strip()
+    start = _log_date_bound(start_raw)
+    end = _log_date_bound(end_raw, end=True)
+    if start and end and start > end:
+        raise ValueError('Start time must be before or equal to end time.')
+
+    return {
+        'level': level,
+        'q': str(args.get('q') or '').strip(),
+        'start': start_raw,
+        'end': end_raw,
+        'start_bound': start,
+        'end_bound': end,
+        'limit': limit,
+        'cursor': cursor or None,
+        'snapshot': snapshot or None,
+    }
+
+
+def _log_filter_form_values(args):
+    """Keep invalid submitted values visible when rendering the error state."""
+    return {
+        'level': str(args.get('level') or 'ALL'),
+        'q': str(args.get('q') or ''),
+        'start': str(args.get('start') or ''),
+        'end': str(args.get('end') or ''),
+    }
+
+
+def _get_log_page(args):
+    filters = _parse_log_filters(args)
+    log_path = os.path.join(app.instance_path, 'logs', 'beakon.log')
+    entries, snapshot = read_log_snapshot(
+        log_path, backup_count=file_handler.backupCount,
+        snapshot=filters['snapshot'])
+    matches = filter_log_entries(
+        entries,
+        level=filters['level'],
+        search=filters['q'],
+        start=filters['start_bound'],
+        end=filters['end_bound'],
+    )
+    # The snapshot pins exact file contents; the keyset cursor walks older
+    # immutable byte positions within it. Appends and rotation cannot shift pages.
+    total = len(matches)
+    if filters['cursor']:
+        older_matches = [entry for entry in matches
+                         if entry['key'] < filters['cursor']]
+    else:
+        older_matches = matches
+    offset = total - len(older_matches)
+    page = older_matches[:filters['limit']]
+    next_cursor = page[-1]['key'] if len(older_matches) > len(page) else None
+    return {
+        'entries': page,
+        'total': total,
+        'offset': offset,
+        'limit': filters['limit'],
+        'next_cursor': next_cursor,
+        'snapshot': snapshot,
+        'filters': filters,
+    }
+
+
+@app.route('/admin/api/logs', methods=['GET'])
+@login_required
+@admin_required
+def admin_api_logs():
+    """Filtered, paginated JSON view of the active log and rotated backups."""
+    try:
+        return _get_log_page(request.args), 200
+    except ValueError as exc:
+        return {'error': str(exc)}, 400
+    except OSError:
+        return {'error': 'Unable to read the application logs.'}, 500
+
+
 @app.route('/admin/audit', methods=['GET'])
 @login_required
 @admin_required
 def admin_audit():
-    log_path = os.path.join(app.instance_path, 'logs', 'beakon.log')
-    logs = []
-    if os.path.exists(log_path):
-        with open(log_path, 'r') as f:
-            logs = f.readlines()[-100:] # Last 100 lines
-    return render_template('admin_audit.html', logs=logs)
+    """Filterable logs page; the first page also renders without JavaScript."""
+    try:
+        page = _get_log_page(request.args)
+        return render_template('admin_audit.html', log_level=current_log_level(),
+                               initial_error=None, **page)
+    except ValueError as exc:
+        error = str(exc)
+    except OSError:
+        error = 'Unable to read the application logs.'
+    return render_template(
+        'admin_audit.html',
+        log_level=current_log_level(),
+        entries=[],
+        total=0,
+        offset=0,
+        limit=LOG_PAGE_SIZE,
+        next_cursor=None,
+        snapshot=None,
+        filters=_log_filter_form_values(request.args),
+        initial_error=error,
+    )
 
 @app.route('/admin/users/create', methods=['POST'])
 @login_required
@@ -1430,6 +1650,26 @@ def admin_set_registration():
                     current_user.get_username(), 'on' if enabled else 'off')
     _log_request_summary('/admin/settings/registration', 200, data.keys())
     return {'registration_enabled': enabled}, 200
+
+@app.route('/admin/settings/log-level', methods=['POST'])
+@login_required
+@admin_required
+def admin_set_log_level():
+    """Persist and immediately apply an admin-selected application log level."""
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or 'log_level' not in data:
+        return {'error': 'log_level is required'}, 400
+    level = normalise_log_level(data.get('log_level'), None)
+    if level is None:
+        return {'error': 'log_level must be one of: %s.' % ', '.join(LOG_LEVELS)}, 400
+
+    previous_level = current_log_level()
+    set_app_setting(LOG_LEVEL_SETTING_KEY, level)
+    _emit_audit_event('%s changed the log level from %s to %s',
+                      current_user.get_username(), previous_level, level)
+    apply_log_level(level)
+    _log_request_summary('/admin/settings/log-level', 200, data.keys())
+    return {'log_level': level}, 200
 
 # Presence search: "when was this person within radius R of point P recently?"
 # Returns the 10 most recent calendar days on which the person logged at least one
