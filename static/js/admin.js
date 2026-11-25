@@ -120,6 +120,42 @@ function toggleRegistration(btn) {
     });
 }
 
+function saveLogLevel() {
+    var btn = document.getElementById('save-log-level-btn');
+    var select = document.getElementById('log-level-select');
+    var status = document.getElementById('log-level-status');
+    if (!btn || !select || !status) return;
+
+    btn.disabled = true;
+    status.hidden = false;
+    status.className = 'admin-settings-status';
+    status.textContent = 'Saving…';
+
+    fetch('/admin/settings/log-level', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({log_level: select.value})
+    }).then(function (res) {
+        return res.json().catch(function () { return {}; })
+            .then(function (data) { return {ok: res.ok, data: data}; });
+    }).then(function (result) {
+        if (result.ok) {
+            select.value = result.data.log_level;
+            document.getElementById('log-level-state').textContent = result.data.log_level;
+            status.className = 'admin-settings-status success';
+            status.textContent = 'Log level set to ' + result.data.log_level + '.';
+        } else {
+            status.className = 'admin-settings-status error';
+            status.textContent = result.data.error || 'Error updating the log level.';
+        }
+    }).catch(function () {
+        status.className = 'admin-settings-status error';
+        status.textContent = 'Error updating the log level. Please try again.';
+    }).finally(function () {
+        btn.disabled = false;
+    });
+}
+
 document.addEventListener('DOMContentLoaded', function () {
     var dataEl = document.getElementById('admin-users-data');
     if (dataEl) {
@@ -135,6 +171,11 @@ document.addEventListener('DOMContentLoaded', function () {
         toggleRegistrationBtn.addEventListener('click', function () {
             toggleRegistration(toggleRegistrationBtn);
         });
+    }
+
+    var saveLogLevelBtn = document.getElementById('save-log-level-btn');
+    if (saveLogLevelBtn) {
+        saveLogLevelBtn.addEventListener('click', saveLogLevel);
     }
 
     var addBtn = document.getElementById('add-user-btn');

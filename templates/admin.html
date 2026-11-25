@@ -15,7 +15,7 @@
   </div>
 </div>
 <div class="grid-x grid-padding-x">
-  <div class="large-12 cell">
+  <div class="medium-6 cell">
     <div class="callout">
       <h5>Registration</h5>
       <p>
@@ -26,6 +26,25 @@
               data-enabled="{{ 'true' if registration_enabled else 'false' }}">
         {{ 'Disable registration' if registration_enabled else 'Enable registration' }}
       </button>
+    </div>
+  </div>
+  <div class="medium-6 cell">
+    <div class="callout">
+      <h5>Logging</h5>
+      <p>Application logs are currently set to <strong id="log-level-state">{{ log_level }}</strong>.</p>
+      <label for="log-level-select">Application log level</label>
+      <select id="log-level-select">
+        {% for level in log_levels %}
+        <option value="{{ level }}"{% if level == log_level %} selected{% endif %}>{{ level }}</option>
+        {% endfor %}
+      </select>
+      <p class="admin-settings-help">
+        Changes apply immediately and survive restarts. Log-level changes are always
+        audited. WARNING and above suppress other INFO audit events such as sign-ins
+        and password resets.
+      </p>
+      <button class="button" id="save-log-level-btn" type="button">Save log level</button>
+      <p class="admin-settings-status" id="log-level-status" role="status" aria-live="polite" hidden></p>
     </div>
   </div>
 </div>

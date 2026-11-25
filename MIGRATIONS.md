@@ -218,11 +218,10 @@ only consequence is that a location older than a day loses the sub-second part o
 unknown JSON fields is completely unaffected — but a client that *rejects* them throws on the
 new key, breaks its location view, and produces **no server-side error at all**, so the server
 log looks healthy while the app is broken. Beakon's own Android app only ignores unknown fields
-from **v1.2** onward (`ignoreUnknownKeys` in `BeakonClient.kt`), so an instance serving an older
-pinned APK — `companion-v1.0.2`, for example — will break that app the moment the server is
-updated. Check the pin in `companion-apk.txt` and get the app to v1.2 or later first, or update
-the server and the pin together. Newer builds are unaffected in either direction, because the
-app falls back to `timestamp` when `timestamp_unix` is absent.
+from **v1.2** onward (`ignoreUnknownKeys` in `BeakonClient.kt`), so an older app build will break
+the moment the server is updated. Upgrade the Android app to v1.2 or later before updating the
+server. Newer builds are unaffected in either direction, because the app falls back to
+`timestamp` when `timestamp_unix` is absent.
 
 **A fresh install** gets the same schema from `db.create_all()` and writes epoch from the
 start, so new and migrated databases agree.

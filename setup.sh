@@ -148,6 +148,9 @@ MAPBOX_API_KEY = '$MAPBOX_API_KEY'
 
 REGISTRATION_ENABLED = True
 
+# Default application log level; admins can override this at runtime.
+LOG_LEVEL = DEBUG
+
 SECRET_KEY = '$SECRET_KEY'
 
 VERSION = '$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")'
@@ -171,22 +174,6 @@ with app.app_context():
     db.create_all()
 "
 print_success "Database initialized"
-
-print_header "Companion APK (Optional)"
-
-echo -e "Beakon serves its Android companion app from ${BLUE}static/beakon-companion-debug.apk${NC}."
-echo -e "That binary is ${YELLOW}not${NC} committed to git, so a fresh instance must download it"
-echo -e "or the top bar's 'Download the Beakon app' menu item will 404."
-echo ""
-
-if prompt_yes_no "Download and verify the companion APK now?"; then
-    if ./scripts/fetch-companion-apk.sh; then
-        print_success "Companion APK ready"
-    else
-        print_warning "Could not fetch the companion APK (offline?). The download menu"
-        print_warning "item will 404 until you run ./scripts/fetch-companion-apk.sh"
-    fi
-fi
 
 print_header "Test Data (Optional)"
 
